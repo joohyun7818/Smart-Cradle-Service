@@ -1,4 +1,4 @@
-# 스마트 아기요람
+ㅌㅌ# 스마트 아기요람
 
 
 ## 프로젝트 개요
@@ -19,7 +19,7 @@
 - **배포**: <img src="https://img.shields.io/badge/Amazon AWS-232F3E?style=flat&logo=amazonaws&logoColor=white"/>
 
 - **협업 툴**: <img src="https://img.shields.io/badge/notion-ffffff?style=flat&logo=notion&logoColor=black"/> <img src="https://img.shields.io/badge/github-1c8139?style=flat&logo=github&logoColor=white"/> <img src="https://img.shields.io/badge/discord-5562ea?style=flat&logo=discord&logoColor=white"/>
-- **디자인**:
+- **디자인**: <img src="https://img.shields.io/badge/figma-430098?style=flat&logo=figma&logoColor=white"/>
 
 ## 프로젝트
 시스템 구성도
