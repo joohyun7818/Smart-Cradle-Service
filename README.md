@@ -7,9 +7,11 @@
 ## 프로젝트 소개
 
 
-| **홍가의 (IoT)** | **임주현 (백엔드)** | **이재왕 (프론트)** | **김지언 (프론트)** | **윤세빈 (IoT)** |
-| :------: | :------: | :------: | :------: | :------: |
-
+## 멤버 소개
+|<img width=150 src="" />|<img width=150 src="" />|<img width=150 src="" />|<img width=150 src="" />|<img width=150 src="" />|
+|:----:|:----:|:----:|:----:|:----:|
+| [홍가의](https://github.com/) | [윤세빈](https://github.com/)) | [임주현](https://github.com/) | [이재왕](https://github.com/) | [김지언](https://github.com/) |
+| Iot | IoT | Back-End | Front-End | Front-End |
 
 ## 개발환경
 **Front-end**:  <img src="https://img.shields.io/badge/flutter-02569B?style=flat&logo=flutter&logoColor=white"/>
