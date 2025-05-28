@@ -14,7 +14,7 @@
 | IoT | IoT | Back-End | Front-End | Front-End |
 
 ## 개발환경
-**Front-end**:  <img src="https://img.shields.io/badge/flutter-02569B?style=flat&logo=flutter&logoColor=white"/>
+- **Front-end**:  <img src="https://img.shields.io/badge/flutter-02569B?style=flat&logo=flutter&logoColor=white"/>
 
 - **Back-end**:  <img src="https://img.shields.io/badge/node.js-339933?style=flat&logo=Node.js&logoColor=white"/>
 
