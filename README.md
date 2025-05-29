@@ -33,7 +33,7 @@
 
 
 프로젝트 계획서
-
+[프로젝트 계획서 ppt](https://raw.githubusercontent.com/rx5460/pophub_full/main/도파밍_팝허브_발표.pptx)
 
 프로젝트 최종발표
 
