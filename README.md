@@ -33,7 +33,8 @@
 
 
 프로젝트 계획서
-(https://raw.githubusercontent.com/DMU-6team/6team/main/스마트아기요람계획서.pptx)
+
+[프로젝트 계획서 ppt](https://raw.githubusercontent.com/DMU-6team/6team/main/스마트아기요람계획서.pptx)
 
 프로젝트 최종발표
 
