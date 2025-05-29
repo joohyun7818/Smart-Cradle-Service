@@ -1,5 +1,5 @@
 # 스마트 아기요람
-![슬라이드3](https://github.com/user-attachments/assets/a863148b-a234-48b4-9c73-624ccf8cc2ca)
+
 
 ## 1. 프로젝트 개요
 
