@@ -38,5 +38,7 @@
 
 프로젝트 최종발표
 
+[프로젝트 최종발표 ppt](https://raw.githubusercontent.com/DMU-6team/6team/main/.pptx)
+
 
 시연 영상
