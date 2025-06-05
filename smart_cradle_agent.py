@@ -20,13 +20,13 @@ import joblib
 import mediapipe as mp
 
 # 설정
-SERVER_URL = 'http://192.168.219.111:80'
+SERVER_URL = 'SERVER_URL'
 CRADLE_UUID = 'cradle-unique-id-example'
 FRAME_UPLOAD_INTERVAL = 0.1
 QR_CODE_FILENAME = 'cradle_qrcode.png'
 
 # MQTT 설정
-MQTT_BROKER_HOST = "192.168.219.111"
+MQTT_BROKER_HOST = "SERVER_IP"
 MQTT_BROKER_PORT = 1883
 MQTT_TOPIC_TEMPERATURE = f"cradle/{CRADLE_UUID}/temperature"
 MQTT_TOPIC_FRAME = f"cradle/{CRADLE_UUID}/frame"
