@@ -14,7 +14,7 @@ import base64
 app = Flask(__name__)
 
 # MQTT 설정
-MQTT_BROKER_HOST = "192.168.219.111"  # 실제 EC2 서버의 공용 IP 주소
+MQTT_BROKER_HOST = "SERVER_IP"  # 실제 EC2 서버의 공용 IP 주소
 MQTT_BROKER_PORT = 1883
 
 # 에이전트별 마지막 프레임을 저장하는 딕셔너리
@@ -76,7 +76,7 @@ except Exception as e:
     print(f"MQTT 연결 오류: {e}")
 
 app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/smart_cradle'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DB_USER:DB_PW@SERVER_IP/DB_NAME'
 db = SQLAlchemy(app)
 
 class User(db.Model):
