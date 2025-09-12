@@ -1,0 +1,8 @@
+Flask==2.3.2
+Flask_SQLAlchemy==3.0.3
+pymysql==1.1.0
+paho-mqtt==1.6.1
+numpy==1.26.4
+opencv-python-headless==4.8.1.78
+gunicorn==21.2.0
+cryptography>=40.0
