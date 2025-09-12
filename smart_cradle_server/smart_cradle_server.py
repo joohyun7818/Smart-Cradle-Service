@@ -131,7 +131,30 @@ class Agent(db.Model):
 # Ensure tables are created when the WSGI server (gunicorn) imports this module.
 # Earlier `db.create_all()` was inside `if __name__ == '__main__'` which doesn't run under gunicorn.
 with app.app_context():
+    # Wait for DB to be ready. This avoids a race where the web container
+    # starts and tries to create tables before the MySQL server accepts
+    # connections. We attempt to connect a few times with exponential backoff.
+    def wait_for_db(max_attempts=20, initial_delay=1):
+        attempt = 0
+        delay = initial_delay
+        from sqlalchemy import text
+        while True:
+            try:
+                # simple lightweight query to verify connection
+                db.session.execute(text('SELECT 1'))
+                print("DB 연결 확인됨")
+                return True
+            except Exception as e:
+                attempt += 1
+                print(f"DB 연결 대기 중... (시도 {attempt}): {e}")
+                if attempt >= max_attempts:
+                    print("DB 연결을 위한 최대 재시도 도달, 계속 진행합니다 (테이블 생성 시 예외가 발생할 수 있음)")
+                    return False
+                time.sleep(delay)
+                delay = min(delay * 2, 10)
+
     try:
+        wait_for_db()
         db.create_all()
         print("DB 테이블 생성/확인 완료")
     except Exception as e:
