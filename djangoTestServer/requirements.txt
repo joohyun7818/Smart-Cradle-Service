@@ -1,0 +1,7 @@
+Django==5.2.4
+djangorestframework
+pymysql
+paho-mqtt
+opencv-python
+numpy
+Pillow

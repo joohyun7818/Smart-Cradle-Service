@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">스마트 요람 모니터링 대시보드</h2>
+    <div class="row justify-content-center">
+        {% for agent in agents %}
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">요람 ID: {{ agent.uuid }}</h5>
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="toggleCard('card-{{ agent.uuid }}')">
+                        <i class="fas fa-chevron-up" id="icon-{{ agent.uuid }}"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0" id="card-{{ agent.uuid }}">
+                    <div class="row g-0">
+                        <!-- 영상 스트림 -->
+                        <div class="col-md-9">
+                            <div class="video-container">
+                                <img src="{{ url_for('video_feed', uuid=agent.uuid) }}" 
+                                     class="video-stream" alt="Video Stream"
+                                     onerror="this.onerror=null; this.src=''; this.parentElement.classList.add('stream-error');">
+                                <div class="stream-waiting">
+                                    <i class="fas fa-video fa-3x mb-3"></i>
+                                    <h4>영상 스트림 대기 중...</h4>
+                                    <p class="text-muted">카메라 연결을 확인해주세요</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 센서 데이터 -->
+                        <div class="col-md-3 p-3">
+                            <div class="card mb-3">
+                                <div class="card-header">체온 센서</div>
+                                <div class="card-body">
+                                    {% if agent.uuid in agent_sensor_data and agent_sensor_data[agent.uuid].temperature %}
+                                        <h3>{{ agent_sensor_data[agent.uuid].temperature }}°C</h3>
+                                    {% else %}
+                                        <p class="text-muted">측정 중...</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">울음 감지</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0" id="crying-status-{{ agent.uuid }}">측정 중...</h6>
+                                            <small class="text-muted" id="crying-probability-{{ agent.uuid }}"></small>
+                                        </div>
+                                        <div class="ms-3">
+                                            <i class="fas fa-baby fa-2x text-primary" id="crying-icon-{{ agent.uuid }}"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">얼굴 방향</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0" id="direction-status-{{ agent.uuid }}">측정 중...</h6>
+                                        </div>
+                                        <div class="ms-3">
+                                            <i class="fas fa-face-smile fa-2x text-primary"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">모터 제어</div>
+                                <div class="card-body">
+                                    <button class="btn btn-primary w-100" 
+                                            onclick="toggleMotor('{{ agent.uuid }}')" 
+                                            id="motor-btn-{{ agent.uuid }}">
+                                        모터 작동
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 75%; /* 4:3 비율 */
+    background-color: #000;
+}
+
+.video-stream {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.stream-waiting {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #f8f9fa;
+    text-align: center;
+    padding: 2rem;
+}
+
+.stream-error .stream-waiting {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.stream-waiting i {
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+
+.stream-waiting h4 {
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.card-body {
+    padding: 1rem;
+}
+
+.card-header {
+    padding: 0.75rem 1rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0,0,0,.125);
+}
+</style>
+
+<script>
+let motorStates = {};
+
+function toggleCard(cardId) {
+    const card = document.getElementById(cardId);
+    const icon = document.getElementById(cardId.replace('card-', 'icon-'));
+    
+    if (card.style.display === 'none') {
+        card.style.display = 'block';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        card.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    }
+}
+
+function toggleMotor(uuid) {
+    const button = document.getElementById(`motor-btn-${uuid}`);
+    const isActive = motorStates[uuid] || false;
+    
+    fetch(`/control_motor/${uuid}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: isActive ? 'stop' : 'start'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            motorStates[uuid] = !isActive;
+            button.textContent = isActive ? '모터 작동' : '모터 중지';
+            button.classList.toggle('btn-primary');
+            button.classList.toggle('btn-danger');
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+// 데이터 업데이트 함수
+function updateSensorData(uuid) {
+    fetch(`/get_sensor_data/${uuid}`)
+        .then(response => response.json())
+        .then(sensorData => {
+            // 울음 감지 상태 업데이트
+            const cryingStatus = document.getElementById(`crying-status-${uuid}`);
+            const cryingProbability = document.getElementById(`crying-probability-${uuid}`);
+            const cryingIcon = document.getElementById(`crying-icon-${uuid}`);
+            
+            if (sensorData.crying) {
+                cryingStatus.textContent = sensorData.crying === 'Crying' ? '울음 감지됨' : '조용함';
+                cryingStatus.className = `mb-0 ${sensorData.crying === 'Crying' ? 'text-danger' : 'text-success'}`;
+                if (sensorData.probability) {
+                    cryingProbability.textContent = `확률: ${(sensorData.probability * 100).toFixed(1)}%`;
+                }
+                cryingIcon.className = `fas fa-baby fa-2x ${sensorData.crying === 'Crying' ? 'text-danger' : 'text-success'}`;
+            } else {
+                cryingStatus.textContent = '측정 중...';
+                cryingStatus.className = 'mb-0 text-muted';
+                cryingProbability.textContent = '';
+                cryingIcon.className = 'fas fa-baby fa-2x text-primary';
+            }
+            
+            // 얼굴 방향 상태 업데이트
+            const directionStatus = document.getElementById(`direction-status-${uuid}`);
+            if (sensorData.direction) {
+                directionStatus.textContent = sensorData.direction;
+                directionStatus.className = 'mb-0';
+            } else {
+                directionStatus.textContent = '측정 중...';
+                directionStatus.className = 'mb-0 text-muted';
+            }
+        })
+        .catch(error => {
+            console.error(`센서 데이터 업데이트 오류 (${uuid}):`, error);
+            // 에러 발생 시 측정 중 상태로 표시
+            const cryingStatus = document.getElementById(`crying-status-${uuid}`);
+            const cryingProbability = document.getElementById(`crying-probability-${uuid}`);
+            const cryingIcon = document.getElementById(`crying-icon-${uuid}`);
+            const directionStatus = document.getElementById(`direction-status-${uuid}`);
+            
+            cryingStatus.textContent = '측정 중...';
+            cryingStatus.className = 'mb-0 text-muted';
+            cryingProbability.textContent = '';
+            cryingIcon.className = 'fas fa-baby fa-2x text-primary';
+            directionStatus.textContent = '측정 중...';
+            directionStatus.className = 'mb-0 text-muted';
+        });
+}
+
+// 각 에이전트에 대한 데이터 업데이트 시작
+document.addEventListener('DOMContentLoaded', function() {
+    const agents = document.querySelectorAll('[id^="motor-btn-"]');
+    agents.forEach(button => {
+        const uuid = button.id.replace('motor-btn-', '');
+        // 초기 데이터 로드
+        updateSensorData(uuid);
+        // 1초마다 데이터 업데이트
+        setInterval(() => updateSensorData(uuid), 1000);
+    });
+});
+
+// 모터 제어 함수
+function controlMotor(uuid, action) {
+    fetch(`/control_motor/${uuid}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: action })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('모터 제어 성공:', action);
+        } else {
+            console.error('모터 제어 실패:', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('모터 제어 오류:', error);
+    });
+}
+</script>
+{% endblock %}

@@ -95,9 +95,3 @@ docker compose exec db mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABAS
 ## 추가 자료
 - 백업/복원 스크립트: `scripts/backup_mysql.sh`, `scripts/restore_mysql.sh`
 - 스케줄러 설치: `scripts/install_cron.sh` (Linux), `scripts/install_launchd.sh` (macOS)
-
-원하시면 제가 현재 구성으로 바로 빌드·기동하거나, 이미지를 레지스트리에 푸시하는 작업을 대신해 드리겠습니다.
-
----
-작성: 로컬 개발 환경을 기준으로 정리했습니다. 운영 환경으로 이전 시에는 추가적인 보안·모니터링·백업 절차가 필요합니다.
-

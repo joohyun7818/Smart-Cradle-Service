@@ -1,8 +1,0 @@
-Flask
-Flask_SQLAlchemy
-pymysql
-paho-mqtt
-numpy
-opencv-python-headless
-gunicorn
-cryptography

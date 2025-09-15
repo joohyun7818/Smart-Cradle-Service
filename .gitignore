@@ -16,3 +16,13 @@ venv.bak/
 # Docker
 *.log
 docker-compose.override.yml
+
+# macOS
+.DS_Store
+
+# Database backups
+backups/*.sql
+
+# Markdown
+.README_BACKUP.md
+.README_DOCKER.md

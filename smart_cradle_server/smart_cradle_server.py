@@ -103,7 +103,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY') or os.urandom(24)
 sql_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
 if not sql_uri:
     db_user = os.getenv('MYSQL_USER', 'sc_user')
-    db_pass = os.getenv('MYSQL_PASSWORD', 'sc_pass')
+    db_pass = os.getenv('MYSQL_PASSWORD', 'sc_password_1234')
     db_host = os.getenv('MYSQL_HOST', 'db')
     db_name = os.getenv('MYSQL_DATABASE', 'smartcradle')
     sql_uri = f'mysql+pymysql://{db_user}:{db_pass}@{db_host}/{db_name}'
