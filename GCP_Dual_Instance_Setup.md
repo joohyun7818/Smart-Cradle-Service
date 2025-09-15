@@ -71,34 +71,81 @@ git checkout server
 
 ## DB 인스턴스 전용 작업
 
-DB 인스턴스는 MySQL 서버를 운영합니다. **두 가지 방법 중 선택**:
+DB 인스턴스는 MySQL 서버를 직접 설치하여 운영합니다. 보안과 성능을 위해 컨테이너 대신 직접 설치된 MySQL을 사용합니다.
 
-### 방법 1: 직접 설치 (권장)
+### 직접 설치 방법
 
-MySQL을 Ubuntu에 직접 설치하여 운영.
-
-### 방법 2: Docker Compose 사용
-
-Docker를 통해 MySQL 컨테이너를 실행.
-
-> **참고**: Docker Compose를 사용할 경우, 서버 인스턴스와 동일한 `docker-compose.yml`을 사용하되, `web`과 `mosquitto` 서비스를 제외하고 실행.
-
-### 방법 2: Docker Compose 사용
-
-Docker Compose를 통해 MySQL 컨테이너를 실행하는 방법.
-
-#### 21. .env 파일 생성
+#### 21. MySQL 서버 설치 및 설정
 
 ```bash
-cat > .env <<EOF
-MYSQL_ROOT_PASSWORD=root_password_1234
-MYSQL_DATABASE=smartcradle
-MYSQL_USER=sc_user
-MYSQL_PASSWORD=sc_password_1234
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
+# MySQL 설치
+sudo apt install -y mysql-server
+
+# MySQL 보안 설정 (비밀번호 설정, 익명 사용자 제거 등)
+sudo mysql_secure_installation
+
+# MySQL 서비스 시작 및 자동 시작 설정
+sudo systemctl start mysql
+sudo systemctl enable mysql
+
+# MySQL 루트 비밀번호 설정 (예: root_password_1234)
+sudo mysql -u root -p <<EOF
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root_password_1234';
+FLUSH PRIVILEGES;
 EOF
-chmod 600 .env
+
+# 데이터베이스 및 사용자 생성
+sudo mysql -u root -p'root_password_1234' <<EOF
+CREATE DATABASE smartcradle;
+CREATE USER 'sc_user'@'%' IDENTIFIED BY 'sc_password_1234';
+GRANT ALL PRIVILEGES ON smartcradle.* TO 'sc_user'@'%';
+FLUSH PRIVILEGES;
+EOF
+```
+
+#### 22. MySQL 설정 파일 수정 (외부 연결 허용)
+
+```bash
+# MySQL 설정 파일 편집
+sudo cp /etc/mysql/mysql.conf.d/mysqld.cnf /etc/mysql/mysql.conf.d/mysqld.cnf.backup
+sudo sed -i 's/bind-address\s*=\s*127\.0\.0\.1/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# MySQL 재시작
+sudo systemctl restart mysql
+```
+
+#### 23. 백업 디렉터리 생성 및 스크립트 설정
+
+```bash
+mkdir -p backups
+chown -R $USER:$USER backups
+chmod 700 backups
+
+# 백업 스크립트 생성
+cat > backups/daily_backup.sh <<EOF
+#!/bin/bash
+DATE=\$(date +%Y%m%d_%H%M%S)
+mysqldump -u sc_user -p'sc_password_1234' smartcradle > backups/smartcradle_\${DATE}.sql
+find backups -name "*.sql" -mtime +7 -delete  # 7일 이상 된 백업 삭제
+EOF
+chmod +x backups/daily_backup.sh
+
+# 크론탭에 백업 스케줄 추가 (매일 오전 2시)
+(crontab -l ; echo "0 2 * * * /home/\$USER/backups/daily_backup.sh") | crontab -
+```
+
+#### 24. 방화벽 설정 (UFW 사용 시)
+
+```bash
+sudo ufw allow 3306/tcp
+sudo ufw --force enable
+```
+
+#### 25. DB 인스턴스 완료 확인
+
+```bash
+# MySQL 접속 테스트
+mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
 ```
 
 #### 22. 백업 디렉터리 생성
@@ -250,11 +297,13 @@ mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
 
 ## 서버 인스턴스 전용 작업
 
-서버 인스턴스는 앱, MQTT, 웹을 컨테이너로 실행합니다. DB는 외부 DB 인스턴스에 연결.
+서버 인스턴스는 Django 앱과 MQTT 브로커를 컨테이너로 실행합니다. DB는 외부 DB 인스턴스(직접 설치된 MySQL)에 연결합니다.
 
-### 30. .env 파일 생성 (DB 인스턴스 IP 지정)
+**참고**: docker-compose.yml에는 web과 mosquitto 서비스만 포함되어 있습니다. DB와 백업 서비스는 보안상 별도 인스턴스에서 직접 운영합니다.
 
-**중요**: 서버 인스턴스에서는 DB를 로컬이 아닌 외부 DB 인스턴스에 연결합니다.
+### 26. .env 파일 생성 (DB 인스턴스 IP 지정)
+
+**중요**: 서버 인스턴스에서는 DB를 로컬이 아닌 외부 DB 인스턴스(직접 설치된 MySQL)에 연결합니다.
 
 ```bash
 # DB 인스턴스의 내부 IP를 사용 (GCP 내부 네트워크)
@@ -273,6 +322,44 @@ MQTT_BROKER_PORT=1883
 SECRET_KEY=sc_secret_1234
 EOF
 chmod 600 .env
+```
+
+### 27. 데이터 디렉터리 생성
+
+```bash
+mkdir -p data
+chown -R $USER:$USER data
+chmod 700 data
+```
+
+### 28. Docker Compose로 서비스 실행
+
+**서버 인스턴스에서는 web과 mosquitto 서비스만 실행합니다.**
+
+```bash
+# web과 mosquitto 서비스만 실행
+docker compose up -d
+```
+
+### 29. 동작 확인
+
+```bash
+# 컨테이너 상태 확인
+docker compose ps
+
+# 로그 확인
+docker compose logs -f web
+
+# DB 연결 확인 (외부 DB 인스턴스)
+docker compose exec web python manage.py dbshell  # Django shell로 DB 연결 테스트
+```
+
+### 30. 방화벽 설정 (UFW 사용 시)
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 1883/tcp
+sudo ufw --force enable
 ```
 
 ### 31. 데이터 디렉터리 생성
