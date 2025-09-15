@@ -158,21 +158,16 @@ chmod 700 backups
 
 #### 23. Docker Compose로 DB만 실행
 
-```bash
-# web과 mosquitto 제외하고 DB만 실행
-docker compose up -d --scale web=0 --scale mosquitto=0
-
-# 또는 docker-compose.yml에서 web과 mosquitto 서비스를 주석 처리
-```
+**참고**: DB 인스턴스에서는 Docker Compose를 사용하지 않습니다. 직접 MySQL 설치를 권장합니다. 아래 단계로 진행하세요.
 
 #### 24. DB 인스턴스 완료 확인
 
 ```bash
 # MySQL 접속 테스트
-docker compose exec db mysql -u sc_user -p'sc_password_1234' smartcradle -e "SELECT 1;"
+mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
 
 # 백업 테스트
-docker compose exec backup /bin/bash /backups/backup_loop.sh
+./backups/daily_backup.sh
 ```
 
 ### 방법 A: 직접 설치 (권장)
@@ -307,15 +302,12 @@ mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
 
 ```bash
 # DB 인스턴스의 내부 IP를 사용 (GCP 내부 네트워크)
-# 예: DB_INSTANCE_IP=10.128.0.10
-DB_INSTANCE_IP=[DB_인스턴스_내부_IP]
-
 cat > .env <<EOF
 MYSQL_ROOT_PASSWORD=root_password_1234
 MYSQL_DATABASE=smartcradle
 MYSQL_USER=sc_user
 MYSQL_PASSWORD=sc_password_1234
-MYSQL_HOST=\${DB_INSTANCE_IP}
+MYSQL_HOST=10.178.0.6
 MYSQL_PORT=3306
 MQTT_BROKER_HOST=mosquitto
 MQTT_BROKER_PORT=1883
