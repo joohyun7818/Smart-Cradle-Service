@@ -13,8 +13,7 @@ import base64
 
 app = Flask(__name__)
 
-# MQTT 설정: 컨테이너 환경에서는 서비스명으로 접근 가능합니다.
-# docker-compose에서 설정한 값이 있으면 사용하고, 없으면 'mosquitto'를 기본값으로 사용합니다.
+# MQTT 설정
 MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', 'mosquitto')
 MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
 
@@ -70,62 +69,14 @@ def on_message(client, userdata, msg):
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
 
-
-def connect_mqtt_with_retry(client, host, port, max_retries=None):
-    """Try to connect to MQTT broker with exponential backoff.
-    If max_retries is None, retry indefinitely."""
-    attempt = 0
-    wait = 1
-    while True:
-        try:
-            client.connect(host, port, 60)
-            client.loop_start()
-            print(f"MQTT 연결 시도 성공: {host}:{port}")
-            return True
-        except Exception as e:
-            attempt += 1
-            print(f"MQTT 연결 오류 (attempt {attempt}): {e}")
-            if max_retries is not None and attempt >= max_retries:
-                print("최대 재시도 횟수 초과, MQTT 연결 포기")
-                return False
-            time.sleep(wait)
-            wait = min(wait * 2, 30)  # 최대 30초 대기
-
-
-# 시작 시 백그라운드에서 MQTT 연결 시도
-threading.Thread(target=connect_mqtt_with_retry, args=(mqtt_client, MQTT_BROKER_HOST, MQTT_BROKER_PORT, None), daemon=True).start()
-
-# SECURITY: prefer reading SECRET_KEY from environment; fall back to a generated key for local dev
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY') or os.urandom(24)
-
-# Database configuration: read full SQLALCHEMY_DATABASE_URI from env if provided,
-# otherwise construct one from individual MYSQL_* env vars for compatibility with docker-compose
-sql_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
-if not sql_uri:
-    db_user = os.getenv('MYSQL_USER', 'sc_user')
-    db_pass = os.getenv('MYSQL_PASSWORD', 'SC_password_12!45')
-    db_host = os.getenv('MYSQL_HOST', '34.121.73.128')
-    db_port = os.getenv('MYSQL_PORT', '3306')
-    db_name = os.getenv('MYSQL_DATABASE', 'smartcradle')
-    sql_uri = f'mysql+pymysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}'
-
-print(f"DEBUG: DB URI: {sql_uri}")  # 디버깅용 출력
-app.config['SQLALCHEMY_DATABASE_URI'] = sql_uri
-
-# 임시 DB 연결 테스트
 try:
-    import pymysql
-    conn = pymysql.connect(
-        host=db_host,
-        port=int(db_port),
-        user=db_user,
-        password=db_pass,
-        database=db_name
-    )
-    conn.close()
-    print("DEBUG: Direct pymysql connection successful")
+    mqtt_client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
+    mqtt_client.loop_start()
 except Exception as e:
-    print(f"DEBUG: Direct pymysql connection failed: {e}")
+    print(f"MQTT 연결 오류: {e}")
+
+app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://sc_user:DB_PW@SERVER_IP/DB_NAME'
 db = SQLAlchemy(app)
 
 class User(db.Model):
@@ -143,39 +94,6 @@ class Agent(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-
-
-# Ensure tables are created when the WSGI server (gunicorn) imports this module.
-# Earlier `db.create_all()` was inside `if __name__ == '__main__'` which doesn't run under gunicorn.
-with app.app_context():
-    # Wait for DB to be ready. This avoids a race where the web container
-    # starts and tries to create tables before the MySQL server accepts
-    # connections. We attempt to connect a few times with exponential backoff.
-    def wait_for_db(max_attempts=20, initial_delay=1):
-        attempt = 0
-        delay = initial_delay
-        from sqlalchemy import text
-        while True:
-            try:
-                # simple lightweight query to verify connection
-                db.session.execute(text('SELECT 1'))
-                print("DB 연결 확인됨")
-                return True
-            except Exception as e:
-                attempt += 1
-                print(f"DB 연결 대기 중... (시도 {attempt}): {e}")
-                if attempt >= max_attempts:
-                    print("DB 연결을 위한 최대 재시도 도달, 계속 진행합니다 (테이블 생성 시 예외가 발생할 수 있음)")
-                    return False
-                time.sleep(delay)
-                delay = min(delay * 2, 10)
-
-    try:
-        wait_for_db()
-        db.create_all()
-        print("DB 테이블 생성/확인 완료")
-    except Exception as e:
-        print(f"DB 테이블 생성 중 오류: {e}")
 
 @app.route('/')
 def dashboard_page():
