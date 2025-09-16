@@ -103,13 +103,29 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY') or os.urandom(24)
 sql_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
 if not sql_uri:
     db_user = os.getenv('MYSQL_USER', 'sc_user')
-    db_pass = os.getenv('MYSQL_PASSWORD', 'sc_password_1234')
-    db_host = os.getenv('MYSQL_HOST', 'db')
+    db_pass = os.getenv('MYSQL_PASSWORD', 'SC_password_1234@')
+    db_host = os.getenv('MYSQL_HOST', '34.121.73.128')
     db_port = os.getenv('MYSQL_PORT', '3306')
     db_name = os.getenv('MYSQL_DATABASE', 'smartcradle')
     sql_uri = f'mysql+pymysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}'
 
+print(f"DEBUG: DB URI: {sql_uri}")  # 디버깅용 출력
 app.config['SQLALCHEMY_DATABASE_URI'] = sql_uri
+
+# 임시 DB 연결 테스트
+try:
+    import pymysql
+    conn = pymysql.connect(
+        host=db_host,
+        port=int(db_port),
+        user=db_user,
+        password=db_pass,
+        database=db_name
+    )
+    conn.close()
+    print("DEBUG: Direct pymysql connection successful")
+except Exception as e:
+    print(f"DEBUG: Direct pymysql connection failed: {e}")
 db = SQLAlchemy(app)
 
 class User(db.Model):
