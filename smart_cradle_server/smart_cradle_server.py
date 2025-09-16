@@ -105,8 +105,9 @@ if not sql_uri:
     db_user = os.getenv('MYSQL_USER', 'sc_user')
     db_pass = os.getenv('MYSQL_PASSWORD', 'sc_password_1234')
     db_host = os.getenv('MYSQL_HOST', 'db')
+    db_port = os.getenv('MYSQL_PORT', '3306')
     db_name = os.getenv('MYSQL_DATABASE', 'smartcradle')
-    sql_uri = f'mysql+pymysql://{db_user}:{db_pass}@{db_host}/{db_name}'
+    sql_uri = f'mysql+pymysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = sql_uri
 db = SQLAlchemy(app)

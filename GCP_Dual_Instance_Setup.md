@@ -20,7 +20,7 @@ sudo apt update && sudo apt upgrade -y
 ### 2. 필수 패키지 설치
 
 ```bash
-sudo apt install -y git curl ca-certificates gnupg lsb-release software-properties-common
+sudo apt install -y net-tools git curl ca-certificates gnupg lsb-release software-properties-common
 ```
 
 ### 3. 편집기 설치 (선택)
@@ -97,7 +97,7 @@ EOF
 # 데이터베이스 및 사용자 생성
 sudo mysql -u root -p'root_password_1234' <<EOF
 CREATE DATABASE smartcradle;
-CREATE USER 'sc_user'@'%' IDENTIFIED BY 'sc_password_1234';
+CREATE USER 'sc_user'@'%' IDENTIFIED BY 'SC_password_1234@';
 GRANT ALL PRIVILEGES ON smartcradle.* TO 'sc_user'@'%';
 FLUSH PRIVILEGES;
 EOF
@@ -145,7 +145,7 @@ sudo ufw --force enable
 
 ```bash
 # MySQL 접속 테스트
-mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
+mysql -u sc_user -p'SC_password_1234@' -h localhost smartcradle -e "SELECT 1;"
 ```
 
 #### 22. 백업 디렉터리 생성
@@ -164,7 +164,7 @@ chmod 700 backups
 
 ```bash
 # MySQL 접속 테스트
-mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
+mysql -u sc_user -p'SC_password_1234@' -h localhost smartcradle -e "SELECT 1;"
 
 # 백업 테스트
 ./backups/daily_backup.sh
@@ -194,7 +194,7 @@ EOF
 # 데이터베이스 및 사용자 생성
 sudo mysql -u root -p'root_password_1234' <<EOF
 CREATE DATABASE smartcradle;
-CREATE USER 'sc_user'@'%' IDENTIFIED BY 'sc_password_1234';
+CREATE USER 'sc_user'@'%' IDENTIFIED BY 'SC_password_1234@';
 GRANT ALL PRIVILEGES ON smartcradle.* TO 'sc_user'@'%';
 FLUSH PRIVILEGES;
 EOF
@@ -292,7 +292,7 @@ mysql -u sc_user -p'sc_password_1234' -h localhost smartcradle -e "SELECT 1;"
 
 ## 서버 인스턴스 전용 작업
 
-서버 인스턴스는 Django 앱과 MQTT 브로커를 컨테이너로 실행합니다. DB는 외부 DB 인스턴스(직접 설치된 MySQL)에 연결합니다.
+서버 인스턴스는 Flask 앱과 MQTT 브로커를 컨테이너로 실행합니다. DB는 외부 DB 인스턴스(직접 설치된 MySQL)에 연결합니다.
 
 **참고**: docker-compose.yml에는 web과 mosquitto 서비스만 포함되어 있습니다. DB와 백업 서비스는 보안상 별도 인스턴스에서 직접 운영합니다.
 
@@ -306,8 +306,8 @@ cat > .env <<EOF
 MYSQL_ROOT_PASSWORD=root_password_1234
 MYSQL_DATABASE=smartcradle
 MYSQL_USER=sc_user
-MYSQL_PASSWORD=sc_password_1234
-MYSQL_HOST=10.178.0.6
+MYSQL_PASSWORD=SC_password_1234@
+MYSQL_HOST=10.128.0.3
 MYSQL_PORT=3306
 MQTT_BROKER_HOST=mosquitto
 MQTT_BROKER_PORT=1883
@@ -324,16 +324,25 @@ chown -R $USER:$USER data
 chmod 700 data
 ```
 
-### 28. Docker Compose로 서비스 실행
+### 28. Docker 이미지 빌드/푸시 (로컬 또는 CI)
+
+```bash
+# Flask 서버 이미지 빌드 (amd64)
+docker buildx build --platform linux/amd64 -t joohyun7818/smart-cradle-flask:latest ./smart_cradle_server
+docker push joohyun7818/smart-cradle-flask:latest
+```
+
+### 29. Docker Compose로 서비스 실행 (서버 인스턴스)
 
 **서버 인스턴스에서는 web과 mosquitto 서비스만 실행합니다.**
 
 ```bash
-# web과 mosquitto 서비스만 실행
+# 최신 이미지 받아오고 스택 실행 (web, mosquitto)
+docker compose pull
 docker compose up -d
 ```
 
-### 29. 동작 확인
+### 30. 동작 확인
 
 ```bash
 # 컨테이너 상태 확인
@@ -341,12 +350,9 @@ docker compose ps
 
 # 로그 확인
 docker compose logs -f web
-
-# DB 연결 확인 (외부 DB 인스턴스)
-docker compose exec web python manage.py dbshell  # Django shell로 DB 연결 테스트
 ```
 
-### 30. 방화벽 설정 (UFW 사용 시)
+### 31. 방화벽 설정 (UFW 사용 시)
 
 ```bash
 sudo ufw allow 80/tcp
@@ -354,7 +360,7 @@ sudo ufw allow 1883/tcp
 sudo ufw --force enable
 ```
 
-### 31. 데이터 디렉터리 생성
+### 32. 데이터 디렉터리 생성
 
 ```bash
 mkdir -p data
@@ -362,7 +368,7 @@ chown -R $USER:$USER data
 chmod 700 data
 ```
 
-### 32. Docker Compose로 스택 빌드 및 시작
+### 33. Docker Compose로 스택 빌드 및 시작
 
 **서버 인스턴스에서는 DB와 백업 서비스를 제외하고 실행합니다.**
 
@@ -373,7 +379,7 @@ docker compose up -d --scale db=0 --scale backup=0
 # 또는 docker-compose.yml에서 db와 backup 서비스를 주석 처리
 ```
 
-### 33. 동작 확인
+### 34. 동작 확인
 
 ```bash
 # 컨테이너 상태 확인 (web, mosquitto만 실행)
@@ -381,10 +387,9 @@ docker compose ps
 
 # 로그 확인
 docker compose logs -f web
-
-# DB 연결 확인 (외부 DB 인스턴스)
-docker compose exec web python manage.py dbshell  # Django shell로 DB 연결 테스트
 ```
+
+> 참고: Flask 앱은 기동 시 DB 연결을 확인하고 필요한 테이블을 자동 생성합니다(`db.create_all()`). 별도의 마이그레이션 명령은 필요 없습니다.
 
 ### 34. 방화벽 설정 (UFW 사용 시)
 
