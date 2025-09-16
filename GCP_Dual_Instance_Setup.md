@@ -2,7 +2,7 @@
 
 이 파일은 GCP에서 스마트요람 서버를 **서버 인스턴스**와 **DB 인스턴스**로 분리하여 배포하는 방법을 단계별로 정리합니다.
 
-- **서버 인스턴스**: Flask/Django 앱, MQTT 브로커 (Mosquitto), 웹 서버, 데이터 저장 (프레임 등).
+- **서버 인스턴스**: Flask 앱, MQTT 브로커 (Mosquitto), 웹 서버, 데이터 저장 (프레임 등).
 - **DB 인스턴스**: MySQL 서버, 데이터베이스 관리, 백업.
 
 두 인스턴스 모두 Ubuntu 기반 GCP VM을 사용하며, DB는 Cloud SQL이 아닌 VM에 직접 MySQL을 설치합니다.
@@ -360,44 +360,7 @@ sudo ufw allow 1883/tcp
 sudo ufw --force enable
 ```
 
-### 32. 데이터 디렉터리 생성
-
-```bash
-mkdir -p data
-chown -R $USER:$USER data
-chmod 700 data
-```
-
-### 33. Docker Compose로 스택 빌드 및 시작
-
-**서버 인스턴스에서는 DB와 백업 서비스를 제외하고 실행합니다.**
-
-```bash
-# DB와 백업 서비스 제외하고 실행
-docker compose up -d --scale db=0 --scale backup=0
-
-# 또는 docker-compose.yml에서 db와 backup 서비스를 주석 처리
-```
-
-### 34. 동작 확인
-
-```bash
-# 컨테이너 상태 확인 (web, mosquitto만 실행)
-docker compose ps
-
-# 로그 확인
-docker compose logs -f web
-```
-
 > 참고: Flask 앱은 기동 시 DB 연결을 확인하고 필요한 테이블을 자동 생성합니다(`db.create_all()`). 별도의 마이그레이션 명령은 필요 없습니다.
-
-### 34. 방화벽 설정 (UFW 사용 시)
-
-```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 1883/tcp
-sudo ufw --force enable
-```
 
 ## 추가 고려사항
 
