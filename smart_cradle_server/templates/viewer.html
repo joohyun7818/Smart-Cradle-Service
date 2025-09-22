@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">Data Viewer for {{ uuid }}</h2>
+
+    <!-- Date Range Selector -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <label for="start_date">Start Date</label>
+            <input type="date" id="start_date" class="form-control">
+        </div>
+        <div class="col-md-4">
+            <label for="end_date">End Date</label>
+            <input type="date" id="end_date" class="form-control">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button id="update_chart" class="btn btn-primary">Update Chart</button>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">Sensor Data</div>
+                <div class="card-body">
+                    <canvas id="sensorChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Player -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">Video Player</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="video_date">Video Date</label>
+                            <input type="date" id="video_date" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="video_time">Video Time</label>
+                            <input type="time" id="video_time" class="form-control">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button id="load_video" class="btn btn-primary">Load Video</button>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <video id="video_player" controls width="100%"></video>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uuid = "{{ uuid }}";
+    const ctx = document.getElementById('sensorChart').getContext('2d');
+    let sensorChart;
+
+    // Set default dates
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    document.getElementById('start_date').valueAsDate = yesterday;
+    document.getElementById('end_date').valueAsDate = today;
+    document.getElementById('video_date').valueAsDate = today;
+    document.getElementById('video_time').value = today.toTimeString().slice(0,5);
+
+
+    function createChart(data) {
+        if (sensorChart) {
+            sensorChart.destroy();
+        }
+        sensorChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Temperature',
+                        data: data.temperature,
+                        borderColor: 'rgb(255, 99, 132)',
+                        yAxisID: 'y-temp',
+                    },
+                    {
+                        label: 'Crying',
+                        data: data.crying,
+                        borderColor: 'rgb(54, 162, 235)',
+                        stepped: true,
+                        yAxisID: 'y-event',
+                    },
+                    {
+                        label: 'Direction',
+                        data: data.direction,
+                        borderColor: 'rgb(75, 192, 192)',
+                        yAxisID: 'y-event',
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'hour'
+                        }
+                    },
+                    'y-temp': {
+                        type: 'linear',
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        }
+                    },
+                    'y-event': {
+                        type: 'category',
+                        labels: ['','Moving', 'Crying', 'Quiet', 'Left', 'Center', 'Right'],
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Events'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function fetchSensorData() {
+        const startDate = document.getElementById('start_date').value;
+        const endDate = document.getElementById('end_date').value;
+
+        fetch(`/api/sensor_data/${uuid}?start_date=${startDate}&end_date=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                const chartData = {
+                    temperature: [],
+                    crying: [],
+                    direction: []
+                };
+                data.forEach(d => {
+                    const timestamp = new Date(d.timestamp);
+                    if(d.temperature) chartData.temperature.push({x: timestamp, y: d.temperature});
+                    if(d.crying) chartData.crying.push({x: timestamp, y: d.crying});
+                    if(d.direction) chartData.direction.push({x: timestamp, y: d.direction});
+                });
+                createChart(chartData);
+            });
+    }
+
+    document.getElementById('update_chart').addEventListener('click', fetchSensorData);
+
+    document.getElementById('load_video').addEventListener('click', function() {
+        const videoDate = document.getElementById('video_date').value;
+        const videoTime = document.getElementById('video_time').value;
+        const videoPlayer = document.getElementById('video_player');
+        videoPlayer.src = `/api/video/${uuid}?date=${videoDate}&time=${videoTime}`;
+        videoPlayer.load();
+    });
+
+    // Initial chart load
+    fetchSensorData();
+});
+</script>
+{% endblock %}

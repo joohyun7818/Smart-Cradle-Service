@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session, url_for, jsonify, Response
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify, Response, send_file
 from flask_sqlalchemy import SQLAlchemy
 import os
 import uuid
@@ -10,6 +10,7 @@ import threading
 import paho.mqtt.client as mqtt
 import json
 import base64
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -21,10 +22,6 @@ MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
 # 에이전트별 마지막 프레임을 저장하는 딕셔너리
 agent_last_frame = {}
 frame_lock = threading.Lock()
-
-# 에이전트별 최신 센서 값을 저장하는 딕셔너리
-agent_sensor_data = {}
-sensor_data_lock = threading.Lock()
 
 # MQTT 클라이언트 설정
 mqtt_client = mqtt.Client()
@@ -46,26 +43,54 @@ def on_message(client, userdata, msg):
         uuid = msg.topic.split('/')[1]
         payload = json.loads(msg.payload.decode())
         
-        with sensor_data_lock:
-            if uuid not in agent_sensor_data:
-                agent_sensor_data[uuid] = {}
-            
+        with app.app_context():
+            agent = Agent.query.filter_by(uuid=uuid).first()
+            if not agent:
+                print(f"경고: UUID '{uuid}'에 해당하는 에이전트를 찾을 수 없습니다. 메시지를 무시합니다.")
+                return
+
             if 'temperature' in msg.topic:
-                agent_sensor_data[uuid]['temperature'] = payload.get('temperature')
+                new_sensor_data = SensorData(
+                    agent_id=agent.id,
+                    temperature=payload.get('temperature')
+                )
+                db.session.add(new_sensor_data)
+                db.session.commit()
+
             elif 'crying' in msg.topic:
-                agent_sensor_data[uuid]['crying'] = payload.get('status')
+                new_sensor_data = SensorData(
+                    agent_id=agent.id,
+                    crying=payload.get('status')
+                )
+                db.session.add(new_sensor_data)
+                db.session.commit()
+
             elif 'direction' in msg.topic:
-                agent_sensor_data[uuid]['direction'] = payload.get('direction')
+                new_sensor_data = SensorData(
+                    agent_id=agent.id,
+                    direction=payload.get('direction')
+                )
+                db.session.add(new_sensor_data)
+                db.session.commit()
+
             elif 'frame' in msg.topic:
-                # 프레임 데이터 처리
                 frame_data = base64.b64decode(payload.get('frame'))
+                new_frame = VideoFrame(
+                    agent_id=agent.id,
+                    frame=frame_data
+                )
+                db.session.add(new_frame)
+                db.session.commit()
+
+                # 메모리 내 마지막 프레임도 업데이트 (실시간 스트리밍용)
                 nparr = np.frombuffer(frame_data, np.uint8)
                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 with frame_lock:
                     agent_last_frame[uuid] = frame
-                
+
     except Exception as e:
-        print(f"MQTT 메시지 처리 오류: {e}")
+        print(f"MQTT 메시지 처리 및 DB 저장 오류: {e}")
+
 
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
@@ -143,6 +168,24 @@ class Agent(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    sensor_data = db.relationship('SensorData', backref='agent', lazy=True)
+    video_frames = db.relationship('VideoFrame', backref='agent', lazy=True)
+
+class SensorData(db.Model):
+    __tablename__ = 'sensor_data'
+    id = db.Column(db.Integer, primary_key=True)
+    agent_id = db.Column(db.Integer, db.ForeignKey('agents.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    temperature = db.Column(db.Float)
+    crying = db.Column(db.String(50))
+    direction = db.Column(db.String(50))
+
+class VideoFrame(db.Model):
+    __tablename__ = 'video_frames'
+    id = db.Column(db.Integer, primary_key=True)
+    agent_id = db.Column(db.Integer, db.ForeignKey('agents.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    frame = db.Column(db.LargeBinary)
 
 
 # Ensure tables are created when the WSGI server (gunicorn) imports this module.
@@ -183,7 +226,7 @@ def dashboard_page():
         return redirect('/login')
     user = User.query.get(session['user_id'])
     agents = user.registered_agents if user else []
-    return render_template('dashboard.html', agents=agents, agent_sensor_data=agent_sensor_data)
+    return render_template('dashboard.html', agents=agents)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register_user():
@@ -255,6 +298,12 @@ def register_cradle():
 
     return render_template('register_cradle.html')
 
+@app.route('/viewer/<uuid>')
+def viewer_page(uuid):
+    if not session.get('user_id'):
+        return redirect('/login')
+    return render_template('viewer.html', uuid=uuid)
+
 def generate_stream(uuid):
     while True:
         with frame_lock:
@@ -288,37 +337,107 @@ def control_motor(uuid):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/crying_status/<uuid>')
-def crying_status(uuid):
-    def generate():
-        while True:
-            with sensor_data_lock:
-                status = agent_sensor_data.get(uuid, {}).get('crying', '측정 중...')
-            yield f"data: {status}\n\n"
-            time.sleep(1)
-    return Response(generate(), mimetype='text/event-stream')
-
-@app.route('/direction_status/<uuid>')
-def direction_status(uuid):
-    def generate():
-        while True:
-            with sensor_data_lock:
-                direction = agent_sensor_data.get(uuid, {}).get('direction', '측정 중...')
-            yield f"data: {direction}\n\n"
-            time.sleep(1)
-    return Response(generate(), mimetype='text/event-stream')
-
 @app.route('/get_sensor_data/<uuid>')
 def get_sensor_data(uuid):
-    with sensor_data_lock:
-        if uuid in agent_sensor_data:
-            return jsonify(agent_sensor_data[uuid])
-        # 404 대신 빈 데이터 반환
+    agent = Agent.query.filter_by(uuid=uuid).first()
+    if not agent:
+        return jsonify({}), 404
+
+    latest_data = SensorData.query.filter_by(agent_id=agent.id).order_by(SensorData.timestamp.desc()).first()
+    if latest_data:
         return jsonify({
-            "crying": None,
-            "direction": None,
-            "temperature": None
+            "crying": latest_data.crying,
+            "direction": latest_data.direction,
+            "temperature": latest_data.temperature,
+            "timestamp": latest_data.timestamp.isoformat()
         })
+    return jsonify({
+        "crying": None,
+        "direction": None,
+        "temperature": None
+    })
+
+@app.route('/api/sensor_data/<uuid>')
+def get_sensor_data_api(uuid):
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    agent = Agent.query.filter_by(uuid=uuid).first()
+    if not agent:
+        return jsonify([])
+
+    try:
+        start_date = datetime.datetime.fromisoformat(start_date_str)
+        end_date = datetime.datetime.fromisoformat(end_date_str)
+    except (ValueError, TypeError):
+        return jsonify([])
+
+    sensor_data = SensorData.query.filter(
+        SensorData.agent_id == agent.id,
+        SensorData.timestamp.between(start_date, end_date)
+    ).order_by(SensorData.timestamp).all()
+
+    return jsonify([
+        {
+            'timestamp': d.timestamp.isoformat(),
+            'temperature': d.temperature,
+            'crying': d.crying,
+            'direction': d.direction
+        }
+        for d in sensor_data
+    ])
+
+def create_video_from_frames(frames):
+    if not frames:
+        return None
+
+    temp_video_path = f"/tmp/{uuid.uuid4()}.mp4"
+    
+    frame_data = frames[0].frame
+    nparr = np.frombuffer(frame_data, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    height, width, layers = img.shape
+    size = (width, height)
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(temp_video_path, fourcc, 10, size)
+
+    for frame_obj in frames:
+        nparr = np.frombuffer(frame_obj.frame, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        out.write(img)
+    
+    out.release()
+    return temp_video_path
+
+@app.route('/api/video/<uuid>')
+def get_video_api(uuid):
+    date_str = request.args.get('date')
+    time_str = request.args.get('time')
+
+    agent = Agent.query.filter_by(uuid=uuid).first()
+    if not agent:
+        return "Agent not found", 404
+
+    try:
+        start_datetime = datetime.datetime.fromisoformat(f"{date_str}T{time_str}")
+        end_datetime = start_datetime + datetime.timedelta(minutes=1)
+    except (ValueError, TypeError):
+        return "Invalid date/time format", 400
+
+    frames = VideoFrame.query.filter(
+        VideoFrame.agent_id == agent.id,
+        VideoFrame.timestamp.between(start_datetime, end_datetime)
+    ).order_by(VideoFrame.timestamp).all()
+
+    if not frames:
+        return "No frames found for this period", 404
+
+    video_path = create_video_from_frames(frames)
+    if video_path:
+        return send_file(video_path, as_attachment=False, mimetype='video/mp4')
+    else:
+        return "Could not create video", 500
 
 if __name__ == '__main__':
     with app.app_context():
