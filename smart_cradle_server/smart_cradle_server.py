@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify, Response, send_file
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import uuid
 import datetime
@@ -39,14 +40,14 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     try:
-        # 토픽에서 UUID 추출
-        uuid = msg.topic.split('/')[1]
+        # 토픽에서 UUID 추출 (변수명 변경: uuid 모듈과 충돌 방지)
+        agent_uuid = msg.topic.split('/')[1]
         payload = json.loads(msg.payload.decode())
         
         with app.app_context():
-            agent = Agent.query.filter_by(uuid=uuid).first()
+            agent = Agent.query.filter_by(uuid=agent_uuid).first()
             if not agent:
-                print(f"경고: UUID '{uuid}'에 해당하는 에이전트를 찾을 수 없습니다. 메시지를 무시합니다.")
+                print(f"경고: UUID '{agent_uuid}'에 해당하는 에이전트를 찾을 수 없습니다. 메시지를 무시합니다.")
                 return
 
             if 'temperature' in msg.topic:
@@ -86,7 +87,7 @@ def on_message(client, userdata, msg):
                 nparr = np.frombuffer(frame_data, np.uint8)
                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 with frame_lock:
-                    agent_last_frame[uuid] = frame
+                    agent_last_frame[agent_uuid] = frame
 
     except Exception as e:
         print(f"MQTT 메시지 처리 및 DB 저장 오류: {e}")
@@ -226,7 +227,15 @@ def dashboard_page():
         return redirect('/login')
     user = User.query.get(session['user_id'])
     agents = user.registered_agents if user else []
-    return render_template('dashboard.html', agents=agents)
+    
+    # 각 에이전트의 최신 센서 데이터 조회
+    agent_sensor_data = {}
+    for agent in agents:
+        latest_data = SensorData.query.filter_by(agent_id=agent.id).order_by(SensorData.timestamp.desc()).first()
+        if latest_data:
+            agent_sensor_data[agent.uuid] = latest_data
+    
+    return render_template('dashboard.html', agents=agents, agent_sensor_data=agent_sensor_data)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register_user():
@@ -236,7 +245,9 @@ def register_user():
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             return render_template('signup.html', registration_error='이미 사용 중인 아이디입니다.')
-        new_user = User(username=username, password=password)
+        # 비밀번호 해싱
+        password_hash = generate_password_hash(password)
+        new_user = User(username=username, password=password_hash)
         db.session.add(new_user)
         db.session.commit()
         return render_template('signup.html', registration_success='회원가입이 완료되었습니다. 로그인해주세요.')
@@ -248,7 +259,8 @@ def login_user():
         username = request.form['username']
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
-        if user and user.password == password:
+        # 비밀번호 해시 검증
+        if user and check_password_hash(user.password, password):
             session['user_id'] = user.id
             return redirect('/')
         else:
@@ -262,22 +274,26 @@ def logout_user():
 
 @app.route('/register_agent', methods=['POST'])
 def register_agent():
-    data = request.get_json()
-    agent_uuid = data.get('uuid')
-    agent_ip = data.get('ip')
-    if agent_uuid and agent_ip:
-        existing_agent = Agent.query.filter_by(uuid=agent_uuid).first()
-        if existing_agent:
-            if existing_agent.ip != agent_ip:
-                existing_agent.ip = agent_ip
+    try:
+        data = request.get_json()
+        agent_uuid = data.get('uuid')
+        agent_ip = data.get('ip')
+        if agent_uuid and agent_ip:
+            existing_agent = Agent.query.filter_by(uuid=agent_uuid).first()
+            if existing_agent:
+                if existing_agent.ip != agent_ip:
+                    existing_agent.ip = agent_ip
+                    db.session.commit()
+                return jsonify({"status": "success", "message": "에이전트 IP 업데이트 성공"})
+            else:
+                new_agent = Agent(uuid=agent_uuid, ip=agent_ip)
+                db.session.add(new_agent)
                 db.session.commit()
-            return jsonify({"status": "success", "message": "에이전트 IP 업데이트 성공"})
-        else:
-            new_agent = Agent(uuid=agent_uuid, ip=agent_ip)
-            db.session.add(new_agent)
-            db.session.commit()
-            return jsonify({"status": "success", "message": "에이전트 등록 성공"})
-    return jsonify({"status": "error", "message": "UUID 또는 IP 주소가 제공되지 않았습니다."})
+                return jsonify({"status": "success", "message": "에이전트 등록 성공"})
+        return jsonify({"status": "error", "message": "UUID 또는 IP 주소가 제공되지 않았습니다."})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": f"등록 중 오류 발생: {str(e)}"}), 500
 
 @app.route('/register_cradle', methods=['GET', 'POST'])
 def register_cradle():
@@ -285,16 +301,20 @@ def register_cradle():
         return redirect('/login')
 
     if request.method == 'POST':
-        cradle_uuid = request.form['cradle_uuid']
-        user_id = session['user_id']
+        try:
+            cradle_uuid = request.form['cradle_uuid']
+            user_id = session['user_id']
 
-        existing_agent = Agent.query.filter_by(uuid=cradle_uuid).first()
-        if existing_agent:
-            existing_agent.user_id = user_id
-            db.session.commit()
-            return redirect('/')
-        else:
-            return render_template('register_cradle.html', error="등록되지 않은 UUID입니다.")
+            existing_agent = Agent.query.filter_by(uuid=cradle_uuid).first()
+            if existing_agent:
+                existing_agent.user_id = user_id
+                db.session.commit()
+                return redirect('/')
+            else:
+                return render_template('register_cradle.html', error="등록되지 않은 UUID입니다.")
+        except Exception as e:
+            db.session.rollback()
+            return render_template('register_cradle.html', error=f"등록 중 오류가 발생했습니다: {str(e)}")
 
     return render_template('register_cradle.html')
 
@@ -324,68 +344,91 @@ def video_feed(uuid):
 def control_motor(uuid):
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': '요청 데이터가 없습니다.'}), 400
+            
         action = data.get('action')
         
         if action not in ['start', 'stop']:
-            return jsonify({'success': False, 'message': '잘못된 액션입니다.'})
+            return jsonify({'success': False, 'message': '잘못된 액션입니다.'}), 400
+        
+        # 에이전트 존재 여부 확인
+        agent = Agent.query.filter_by(uuid=uuid).first()
+        if not agent:
+            return jsonify({'success': False, 'message': '에이전트를 찾을 수 없습니다.'}), 404
             
         topic = f"cradle/{uuid}/servo"
         payload = json.dumps({'action': action})
-        mqtt_client.publish(topic, payload)
+        result = mqtt_client.publish(topic, payload)
+        
+        if result.rc != 0:
+            return jsonify({'success': False, 'message': 'MQTT 메시지 전송 실패'}), 500
         
         return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+        print(f"모터 제어 오류: {e}")
+        return jsonify({'success': False, 'message': f'오류 발생: {str(e)}'}), 500
 
 @app.route('/get_sensor_data/<uuid>')
 def get_sensor_data(uuid):
-    agent = Agent.query.filter_by(uuid=uuid).first()
-    if not agent:
-        return jsonify({}), 404
+    try:
+        agent = Agent.query.filter_by(uuid=uuid).first()
+        if not agent:
+            return jsonify({"error": "에이전트를 찾을 수 없습니다."}), 404
 
-    latest_data = SensorData.query.filter_by(agent_id=agent.id).order_by(SensorData.timestamp.desc()).first()
-    if latest_data:
+        latest_data = SensorData.query.filter_by(agent_id=agent.id).order_by(SensorData.timestamp.desc()).first()
+        if latest_data:
+            return jsonify({
+                "crying": latest_data.crying,
+                "direction": latest_data.direction,
+                "temperature": latest_data.temperature,
+                "timestamp": latest_data.timestamp.isoformat()
+            })
         return jsonify({
-            "crying": latest_data.crying,
-            "direction": latest_data.direction,
-            "temperature": latest_data.temperature,
-            "timestamp": latest_data.timestamp.isoformat()
+            "crying": None,
+            "direction": None,
+            "temperature": None
         })
-    return jsonify({
-        "crying": None,
-        "direction": None,
-        "temperature": None
-    })
+    except Exception as e:
+        print(f"센서 데이터 조회 오류: {e}")
+        return jsonify({"error": "데이터 조회 중 오류가 발생했습니다."}), 500
 
 @app.route('/api/sensor_data/<uuid>')
 def get_sensor_data_api(uuid):
-    start_date_str = request.args.get('start_date')
-    end_date_str = request.args.get('end_date')
-
-    agent = Agent.query.filter_by(uuid=uuid).first()
-    if not agent:
-        return jsonify([])
-
     try:
-        start_date = datetime.datetime.fromisoformat(start_date_str)
-        end_date = datetime.datetime.fromisoformat(end_date_str)
-    except (ValueError, TypeError):
-        return jsonify([])
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
 
-    sensor_data = SensorData.query.filter(
-        SensorData.agent_id == agent.id,
-        SensorData.timestamp.between(start_date, end_date)
-    ).order_by(SensorData.timestamp).all()
+        agent = Agent.query.filter_by(uuid=uuid).first()
+        if not agent:
+            return jsonify({"error": "에이전트를 찾을 수 없습니다."}), 404
 
-    return jsonify([
-        {
-            'timestamp': d.timestamp.isoformat(),
-            'temperature': d.temperature,
-            'crying': d.crying,
-            'direction': d.direction
-        }
-        for d in sensor_data
-    ])
+        if not start_date_str or not end_date_str:
+            return jsonify({"error": "시작 날짜와 종료 날짜를 제공해야 합니다."}), 400
+
+        try:
+            start_date = datetime.datetime.fromisoformat(start_date_str)
+            end_date = datetime.datetime.fromisoformat(end_date_str)
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": f"날짜 형식이 올바르지 않습니다: {str(e)}"}), 400
+
+        sensor_data = SensorData.query.filter(
+            SensorData.agent_id == agent.id,
+            SensorData.timestamp.between(start_date, end_date)
+        ).order_by(SensorData.timestamp).all()
+
+        return jsonify([
+            {
+                'timestamp': d.timestamp.isoformat(),
+                'temperature': d.temperature,
+                'crying': d.crying,
+                'direction': d.direction
+            }
+            for d in sensor_data
+        ])
+    except Exception as e:
+        print(f"센서 데이터 API 오류: {e}")
+        return jsonify({"error": "데이터 조회 중 오류가 발생했습니다."}), 500
 
 def create_video_from_frames(frames):
     if not frames:
@@ -435,7 +478,18 @@ def get_video_api(uuid):
 
     video_path = create_video_from_frames(frames)
     if video_path:
-        return send_file(video_path, as_attachment=False, mimetype='video/mp4')
+        response = send_file(video_path, as_attachment=False, mimetype='video/mp4')
+        
+        # 응답 후 임시 파일 삭제
+        @response.call_on_close
+        def cleanup():
+            try:
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+            except Exception as e:
+                print(f"임시 파일 삭제 오류: {e}")
+        
+        return response
     else:
         return "Could not create video", 500
 
