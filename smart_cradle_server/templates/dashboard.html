@@ -2,7 +2,28 @@
 
 {% block content %}
 <div class="container-fluid">
-    <h2 class="mb-4">스마트 요람 모니터링 대시보드</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">🍼 스마트 요람 모니터링 대시보드</h2>
+        <div class="d-flex gap-2">
+            <a href="/alert_settings" class="btn btn-outline-warning">
+                <i class="fas fa-bell"></i> 알림 설정
+            </a>
+            <a href="/register_cradle" class="btn btn-outline-primary">
+                <i class="fas fa-cog"></i> 요람 관리
+            </a>
+        </div>
+    </div>
+    
+    {% if not agents %}
+    <div class="text-center py-5">
+        <i class="fas fa-baby-carriage fa-4x text-muted mb-3"></i>
+        <h4 class="text-muted">등록된 요람이 없습니다</h4>
+        <p class="text-muted">요람 관리 페이지에서 요람을 등록하세요.</p>
+        <a href="/register_cradle" class="btn btn-primary">
+            <i class="fas fa-plus"></i> 요람 등록하기
+        </a>
+    </div>
+    {% else %}
     <div class="row justify-content-center">
         {% for agent in agents %}
         <div class="col-12 mb-4">
@@ -35,14 +56,27 @@
 
                         <!-- 센서 데이터 -->
                         <div class="col-md-3 p-3">
+                            <!-- 알림 상태 -->
+                            <div class="card mb-3 border-warning" id="alert-status-{{ agent.uuid }}" style="display: none;">
+                                <div class="card-header bg-warning text-dark">
+                                    <i class="fas fa-exclamation-triangle"></i> 알림 상태
+                                </div>
+                                <div class="card-body p-2">
+                                    <div id="alert-messages-{{ agent.uuid }}"></div>
+                                </div>
+                            </div>
+                            
                             <div class="card mb-3">
-                                <div class="card-header">체온 센서</div>
+                                <div class="card-header">
+                                    <i class="fas fa-thermometer-half"></i> 체온 센서
+                                </div>
                                 <div class="card-body">
                                     {% if agent.uuid in agent_sensor_data and agent_sensor_data[agent.uuid].temperature %}
-                                        <h3>{{ agent_sensor_data[agent.uuid].temperature }}°C</h3>
+                                        <h3 id="temperature-{{ agent.uuid }}">{{ agent_sensor_data[agent.uuid].temperature }}°C</h3>
                                     {% else %}
-                                        <p class="text-muted">측정 중...</p>
+                                        <h3 id="temperature-{{ agent.uuid }}" class="text-muted">측정 중...</h3>
                                     {% endif %}
+                                    <small class="text-muted">정상 범위: 36.0~37.5°C</small>
                                 </div>
                             </div>
 
@@ -63,17 +97,24 @@
                                 </div>
                             </div>
 
-                            <div class="card">
+                            <div class="card mb-3">
                                 <div class="card-header">
-                                    <h5 class="mb-0">얼굴 방향</h5>
+                                    <i class="fas fa-face-smile"></i> 얼굴 방향
                                 </div>
                                 <div class="card-body">
                                     <div class="d-flex align-items-center">
                                         <div class="flex-grow-1">
-                                            <h6 class="mb-0" id="direction-status-{{ agent.uuid }}">측정 중...</h6>
+                                            <h6 class="mb-0" id="direction-status-{{ agent.uuid }}">
+                                                {% if agent.uuid in agent_sensor_data and agent_sensor_data[agent.uuid].direction %}
+                                                    {{ agent_sensor_data[agent.uuid].direction }}
+                                                {% else %}
+                                                    측정 중...
+                                                {% endif %}
+                                            </h6>
+                                            <small class="text-muted">마지막 업데이트: <span id="direction-time-{{ agent.uuid }}">-</span></small>
                                         </div>
                                         <div class="ms-3">
-                                            <i class="fas fa-face-smile fa-2x text-primary"></i>
+                                            <i class="fas fa-face-smile fa-2x" id="direction-icon-{{ agent.uuid }}"></i>
                                         </div>
                                     </div>
                                 </div>
@@ -96,6 +137,7 @@
         </div>
         {% endfor %}
     </div>
+    {% endif %}
 </div>
 
 <style>
@@ -225,13 +267,53 @@ function updateSensorData(uuid) {
             
             // 얼굴 방향 상태 업데이트
             const directionStatus = document.getElementById(`direction-status-${uuid}`);
+            const directionTime = document.getElementById(`direction-time-${uuid}`);
+            const directionIcon = document.getElementById(`direction-icon-${uuid}`);
+            
             if (sensorData.direction) {
                 directionStatus.textContent = sensorData.direction;
-                directionStatus.className = 'mb-0';
+                
+                // 방향에 따른 스타일링
+                if (sensorData.direction === '정면 유지 중') {
+                    directionStatus.className = 'mb-0 text-success fw-bold';
+                    directionIcon.className = 'fas fa-face-smile fa-2x text-success';
+                } else if (sensorData.direction === '인식 안됨' || sensorData.direction === '인식 오류') {
+                    directionStatus.className = 'mb-0 text-danger fw-bold';
+                    directionIcon.className = 'fas fa-face-frown fa-2x text-danger';
+                } else {
+                    directionStatus.className = 'mb-0 text-warning fw-bold';
+                    directionIcon.className = 'fas fa-face-meh fa-2x text-warning';
+                }
+                
+                if (sensorData.timestamp) {
+                    const time = new Date(sensorData.timestamp);
+                    directionTime.textContent = time.toLocaleTimeString('ko-KR');
+                }
             } else {
                 directionStatus.textContent = '측정 중...';
                 directionStatus.className = 'mb-0 text-muted';
+                directionIcon.className = 'fas fa-face-smile fa-2x text-primary';
+                directionTime.textContent = '-';
             }
+            
+            // 온도 데이터 업데이트
+            const temperatureElement = document.getElementById(`temperature-${uuid}`);
+            if (sensorData.temperature) {
+                const temp = parseFloat(sensorData.temperature);
+                temperatureElement.textContent = `${temp.toFixed(1)}°C`;
+                
+                // 온도에 따른 스타일링
+                if (temp > 38.0) {
+                    temperatureElement.className = 'text-danger fw-bold';
+                } else if (temp > 37.5) {
+                    temperatureElement.className = 'text-warning fw-bold';
+                } else {
+                    temperatureElement.className = 'text-success';
+                }
+            }
+            
+            // 알림 상태 체크
+            checkAgentAlerts(uuid, sensorData);
         })
         .catch(error => {
             console.error(`센서 데이터 업데이트 오류 (${uuid}):`, error);
@@ -248,6 +330,95 @@ function updateSensorData(uuid) {
             directionStatus.textContent = '측정 중...';
             directionStatus.className = 'mb-0 text-muted';
         });
+}
+
+// 에이전트 알림 상태 체크 함수
+function checkAgentAlerts(uuid, sensorData) {
+    const alertCard = document.getElementById(`alert-status-${uuid}`);
+    const alertMessages = document.getElementById(`alert-messages-${uuid}`);
+    
+    // 알림 조건 체크
+    const alerts = [];
+    
+    // 1. 고온 체크
+    if (sensorData.temperature) {
+        const temp = parseFloat(sensorData.temperature);
+        if (temp > 38.0) {
+            alerts.push({
+                type: 'temperature',
+                message: `체온이 ${temp.toFixed(1)}°C로 높습니다!`,
+                level: 'danger'
+            });
+        }
+    }
+    
+    // 2. 얼굴 방향 체크
+    if (sensorData.direction) {
+        if (sensorData.direction === '인식 안됨' || sensorData.direction === '인식 오류') {
+            alerts.push({
+                type: 'face',
+                message: '아기 얼굴이 인식되지 않습니다!',
+                level: 'warning'
+            });
+        } else if (sensorData.direction !== '정면 유지 중') {
+            alerts.push({
+                type: 'position',
+                message: `아기가 ${sensorData.direction} 상태입니다!`,
+                level: 'warning'
+            });
+        }
+    }
+    
+    // 3. 울음 감지 체크
+    if (sensorData.crying === 'Crying') {
+        alerts.push({
+            type: 'crying',
+            message: '아기가 울고 있습니다!',
+            level: 'info'
+        });
+    }
+    
+    // 알림 표시
+    if (alerts.length > 0) {
+        let alertHtml = '';
+        alerts.forEach(alert => {
+            let badgeClass, icon;
+            switch(alert.level) {
+                case 'danger':
+                    badgeClass = 'bg-danger';
+                    icon = 'fas fa-exclamation-triangle';
+                    break;
+                case 'warning':
+                    badgeClass = 'bg-warning';
+                    icon = 'fas fa-exclamation-circle';
+                    break;
+                case 'info':
+                    badgeClass = 'bg-info';
+                    icon = 'fas fa-info-circle';
+                    break;
+                default:
+                    badgeClass = 'bg-secondary';
+                    icon = 'fas fa-bell';
+            }
+            
+            alertHtml += `
+                <div class="d-flex align-items-center mb-1">
+                    <i class="${icon} me-2"></i>
+                    <small class="flex-grow-1">${alert.message}</small>
+                </div>
+            `;
+        });
+        
+        alertMessages.innerHTML = alertHtml;
+        alertCard.style.display = 'block';
+        
+        // 경고음 (선택사항)
+        if (alerts.some(a => a.level === 'danger')) {
+            // console.log('⚠️ 위험 알림:', alerts.filter(a => a.level === 'danger'));
+        }
+    } else {
+        alertCard.style.display = 'none';
+    }
 }
 
 // 각 에이전트에 대한 데이터 업데이트 시작

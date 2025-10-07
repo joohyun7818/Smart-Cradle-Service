@@ -1,0 +1,707 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .chart-card {
+        background-color: #fff;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,.1);
+    }
+    
+    .chart-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 15px;
+    }
+    
+    .chart-subtext {
+        font-size: 12px;
+        color: #666;
+        text-align: center;
+        margin-top: 10px;
+    }
+    
+    .alert-list-section {
+        margin-top: 20px;
+    }
+    
+    .section-title {
+        font-size: 20px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 15px;
+    }
+    
+    .alert-card {
+        background-color: #fff;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,.08);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .alert-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,.15);
+        transform: translateY(-2px);
+    }
+    
+    .alert-card.resolved {
+        opacity: 0.7;
+    }
+    
+    .alert-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .alert-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .alert-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .alert-badge.resolved {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .alert-badge.pending {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .alert-message {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    
+    .alert-meta {
+        display: flex;
+        gap: 15px;
+        font-size: 12px;
+        color: #999;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+    
+    .page-header {
+        margin-bottom: 30px;
+    }
+    
+    .page-header h2 {
+        margin-bottom: 5px;
+    }
+    
+    .page-header .subtitle {
+        color: #666;
+        font-size: 14px;
+    }
+    
+    .cradle-selector {
+        margin-bottom: 20px;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+    
+    .loading i {
+        font-size: 32px;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+
+<div class="container mt-4">
+    <div class="page-header">
+        <h2>📊 히스토리 & 통계</h2>
+        <p class="subtitle">최근 24시간 / 30일</p>
+    </div>
+    
+    {% if agents %}
+    <div class="cradle-selector">
+        <label for="cradleSelect" class="form-label">요람 선택</label>
+        <select class="form-select" id="cradleSelect">
+            {% for agent in agents %}
+            <option value="{{ agent.uuid }}" {% if selected_agent and selected_agent.uuid == agent.uuid %}selected{% endif %}>
+                요람 {{ loop.index }} ({{ agent.uuid[:8] }}...)
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div id="loadingIndicator" class="loading" style="display: none;">
+        <i class="fas fa-spinner"></i>
+        <p>데이터를 불러오는 중...</p>
+    </div>
+    
+    <div id="contentArea">
+        <!-- Temperature Chart -->
+        <div class="chart-card">
+            <div class="chart-title">🌡️ 체온 변화 (24시간)</div>
+            <canvas id="temperatureChart"></canvas>
+            <div class="chart-subtext">시간대별 체온 추이</div>
+        </div>
+        
+        <!-- Direction Pie Chart -->
+        <div class="chart-card">
+            <div class="chart-title">↔️ 아기 방향 분포 (24시간)</div>
+            <canvas id="directionChart"></canvas>
+            <div class="chart-subtext">방향별 시간 비율</div>
+        </div>
+        
+        <!-- Crying Timeline Chart -->
+        <div class="chart-card">
+            <div class="chart-title">😢 울음 감지 타임라인 (24시간)</div>
+            <canvas id="cryingTimelineChart"></canvas>
+            <div class="chart-subtext">시간대별 울음 발생 패턴</div>
+        </div>
+        
+        <!-- Alert Timeline Chart -->
+        <div class="chart-card">
+            <div class="chart-title">⚠️ 알림 발생 타임라인 (24시간)</div>
+            <canvas id="alertTimelineChart"></canvas>
+            <div class="chart-subtext">4시간 단위 알림 발생 건수</div>
+        </div>
+        
+        <!-- Alert List Section -->
+        <div class="alert-list-section">
+            <div class="section-title">📋 알림 목록</div>
+            <div id="alertList"></div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-baby-carriage fa-4x text-muted mb-3"></i>
+        <h4 class="text-muted">등록된 요람이 없습니다</h4>
+        <p class="text-muted">요람 관리 페이지에서 요람을 등록하세요.</p>
+        <a href="/register_cradle" class="btn btn-primary">
+            <i class="fas fa-plus"></i> 요람 등록하기
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Alert Detail Modal -->
+<div class="modal fade" id="alertDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">알림 상세 정보</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalContent">
+                <!-- Dynamic content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let temperatureChart, directionChart, cryingTimelineChart, alertTimelineChart;
+let currentUuid = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const cradleSelect = document.getElementById('cradleSelect');
+    if (cradleSelect) {
+        currentUuid = cradleSelect.value;
+        loadAllData(currentUuid);
+        
+        cradleSelect.addEventListener('change', function() {
+            currentUuid = this.value;
+            loadAllData(currentUuid);
+        });
+    }
+});
+
+async function loadAllData(uuid) {
+    showLoading(true);
+    
+    try {
+        // Load sensor data and alerts in parallel
+        const [sensorData, alerts] = await Promise.all([
+            fetchSensorData(uuid),
+            fetchAlerts(uuid)
+        ]);
+        
+        // Render charts
+        renderTemperatureChart(sensorData);
+        renderDirectionChart(sensorData);
+        renderCryingTimelineChart(sensorData);
+        renderAlertTimelineChart(alerts);
+        renderAlertList(alerts);
+        
+    } catch (error) {
+        console.error('Error loading data:', error);
+        alert('데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function fetchSensorData(uuid) {
+    const end = new Date();
+    const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+    
+    const response = await fetch(`/api/sensor_data/${uuid}?start_date=${start.toISOString()}&end_date=${end.toISOString()}`);
+    return await response.json();
+}
+
+async function fetchAlerts(uuid) {
+    const response = await fetch(`/api/alert_history/${uuid}`);
+    return await response.json();
+}
+
+function renderTemperatureChart(sensorData) {
+    const ctx = document.getElementById('temperatureChart').getContext('2d');
+    
+    // Sample data to max 12 points
+    const sampledData = sampleData(sensorData.filter(d => d.temperature !== null), 12);
+    
+    const labels = sampledData.map(d => {
+        const date = new Date(d.timestamp);
+        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    });
+    
+    const temperatures = sampledData.map(d => d.temperature);
+    
+    if (temperatureChart) {
+        temperatureChart.destroy();
+    }
+    
+    temperatureChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels.length > 0 ? labels : ['데이터 없음'],
+            datasets: [{
+                label: '체온 (°C)',
+                data: temperatures.length > 0 ? temperatures : [0],
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 35,
+                    max: 40
+                }
+            }
+        }
+    });
+}
+
+function renderDirectionChart(sensorData) {
+    const ctx = document.getElementById('directionChart').getContext('2d');
+    
+    // Count direction occurrences
+    const directionCounts = {};
+    sensorData.forEach(d => {
+        if (d.direction) {
+            directionCounts[d.direction] = (directionCounts[d.direction] || 0) + 1;
+        }
+    });
+    
+    const directions = Object.keys(directionCounts);
+    const counts = Object.values(directionCounts);
+    
+    // Color mapping
+    const colorMap = {
+        '정면': '#4CAF50',
+        '왼쪽': '#2196F3',
+        '오른쪽': '#FF9800',
+        '뒤통수': '#F44336',
+        'Left': '#2196F3',
+        'Center': '#4CAF50',
+        'Right': '#FF9800'
+    };
+    
+    const colors = directions.map(d => colorMap[d] || '#9E9E9E');
+    
+    if (directionChart) {
+        directionChart.destroy();
+    }
+    
+    if (directions.length > 0) {
+        directionChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: directions,
+                datasets: [{
+                    data: counts,
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    } else {
+        // Show empty state
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('데이터 없음', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    }
+}
+
+function renderCryingTimelineChart(sensorData) {
+    const ctx = document.getElementById('cryingTimelineChart').getContext('2d');
+    
+    // Create 24 hourly buckets
+    const now = new Date();
+    const buckets = Array(24).fill(0);
+    const labels = [];
+    
+    for (let i = 23; i >= 0; i--) {
+        const hour = new Date(now.getTime() - i * 60 * 60 * 1000);
+        labels.push(`${hour.getHours()}시`);
+    }
+    
+    // Count crying occurrences per hour
+    sensorData.forEach(data => {
+        if (data.crying === 'Crying') {
+            const dataTime = new Date(data.timestamp);
+            const hoursDiff = Math.floor((now - dataTime) / (1000 * 60 * 60));
+            
+            if (hoursDiff >= 0 && hoursDiff < 24) {
+                buckets[23 - hoursDiff]++;
+            }
+        }
+    });
+    
+    if (cryingTimelineChart) {
+        cryingTimelineChart.destroy();
+    }
+    
+    cryingTimelineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '울음 감지 횟수',
+                data: buckets,
+                borderColor: 'rgb(156, 39, 176)',
+                backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderAlertTimelineChart(alerts) {
+    const ctx = document.getElementById('alertTimelineChart').getContext('2d');
+    
+    // Create 6 buckets (4 hours each)
+    const now = new Date();
+    const buckets = Array(6).fill(0);
+    const labels = [];
+    
+    for (let i = 5; i >= 0; i--) {
+        const bucketStart = new Date(now.getTime() - (i + 1) * 4 * 60 * 60 * 1000);
+        labels.push(`${bucketStart.getHours()}시`);
+    }
+    
+    alerts.forEach(alert => {
+        const alertTime = new Date(alert.created_at);
+        const hoursDiff = (now - alertTime) / (1000 * 60 * 60);
+        const bucketIndex = Math.floor(hoursDiff / 4);
+        
+        if (bucketIndex >= 0 && bucketIndex < 6) {
+            buckets[5 - bucketIndex]++;
+        }
+    });
+    
+    if (alertTimelineChart) {
+        alertTimelineChart.destroy();
+    }
+    
+    alertTimelineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '알림 발생 건수',
+                data: buckets,
+                borderColor: 'rgb(255, 159, 64)',
+                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderAlertList(alerts) {
+    const alertList = document.getElementById('alertList');
+    
+    if (alerts.length === 0) {
+        alertList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-check-circle"></i>
+                <p>알림이 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+    
+    alertList.innerHTML = alerts.map(alert => {
+        const date = new Date(alert.created_at);
+        const formattedDate = `${date.getMonth() + 1}월 ${date.getDate()}일`;
+        const formattedTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        
+        const icon = alert.alert_type === 'TEMPERATURE' ? '🌡️' : '↔️';
+        const badgeClass = alert.resolved ? 'resolved' : 'pending';
+        const badgeText = alert.resolved ? '✓ 해결됨' : '대기 중';
+        
+        return `
+            <div class="alert-card ${alert.resolved ? 'resolved' : ''}" onclick="showAlertDetail(${alert.id})">
+                <div class="alert-header">
+                    <div class="alert-title">${icon} ${alert.alert_type === 'TEMPERATURE' ? '체온 경고' : '자세 경고'}</div>
+                    <span class="alert-badge ${badgeClass}">${badgeText}</span>
+                </div>
+                <div class="alert-message">${alert.alert_message}</div>
+                <div class="alert-meta">
+                    <span>📅 ${formattedDate}</span>
+                    <span>🕐 ${formattedTime}</span>
+                    ${alert.temperature ? `<span>🌡️ ${alert.temperature.toFixed(1)}°C</span>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function showAlertDetail(alertId) {
+    const modal = new bootstrap.Modal(document.getElementById('alertDetailModal'));
+    const modalContent = document.getElementById('modalContent');
+    
+    modalContent.innerHTML = `
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p class="mt-3">로딩 중...</p>
+        </div>
+    `;
+    
+    modal.show();
+    
+    try {
+        const response = await fetch(`/api/alert_detail/${alertId}`);
+        const detail = await response.json();
+        
+        const alertDate = new Date(detail.created_at);
+        const formattedDate = `${alertDate.getFullYear()}년 ${alertDate.getMonth() + 1}월 ${alertDate.getDate()}일 ${alertDate.getHours().toString().padStart(2, '0')}:${alertDate.getMinutes().toString().padStart(2, '0')}`;
+        
+        let framesHtml = '';
+        if (detail.video_frames && detail.video_frames.length > 0) {
+            framesHtml = `
+                <div class="mt-4">
+                    <h6>🎥 녹화된 프레임 (${detail.video_frames.length}개)</h6>
+                    <div id="frameViewer" class="text-center">
+                        <img id="currentFrame" src="/api/alert_frame/${detail.video_frames[0].id}" 
+                             class="img-fluid rounded" style="max-height: 400px;">
+                        <div class="mt-3">
+                            <button class="btn btn-secondary" onclick="previousFrame()">◀ 이전</button>
+                            <span id="frameCounter" class="mx-3">1 / ${detail.video_frames.length}</span>
+                            <button class="btn btn-secondary" onclick="nextFrame()">다음 ▶</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let chartsHtml = '';
+        if (detail.sensor_data && detail.sensor_data.length > 0) {
+            chartsHtml = `
+                <div class="mt-4">
+                    <h6>📊 센서 데이터 (${detail.sensor_data.length}개 기록)</h6>
+                    <canvas id="detailTempChart" style="max-height: 200px;"></canvas>
+                </div>
+            `;
+        }
+        
+        modalContent.innerHTML = `
+            <div class="alert alert-${detail.resolved ? 'success' : 'warning'}">
+                <h5>${detail.alert_type === 'TEMPERATURE' ? '🌡️ 체온 경고' : '↔️ 자세 경고'}</h5>
+                <p class="mb-1">${detail.alert_message}</p>
+                <small>📅 ${formattedDate}</small>
+                ${detail.temperature ? `<br><small>🌡️ ${detail.temperature.toFixed(1)}°C</small>` : ''}
+            </div>
+            
+            ${framesHtml}
+            ${chartsHtml}
+        `;
+        
+        // Store frame data for navigation
+        window.currentFrames = detail.video_frames || [];
+        window.currentFrameIndex = 0;
+        
+        // Render detail chart if sensor data exists
+        if (detail.sensor_data && detail.sensor_data.length > 0) {
+            setTimeout(() => renderDetailChart(detail.sensor_data), 100);
+        }
+        
+    } catch (error) {
+        console.error('Error loading alert detail:', error);
+        modalContent.innerHTML = `
+            <div class="alert alert-danger">
+                오류가 발생했습니다.
+            </div>
+        `;
+    }
+}
+
+function previousFrame() {
+    if (window.currentFrameIndex > 0) {
+        window.currentFrameIndex--;
+        updateFrameDisplay();
+    }
+}
+
+function nextFrame() {
+    if (window.currentFrameIndex < window.currentFrames.length - 1) {
+        window.currentFrameIndex++;
+        updateFrameDisplay();
+    }
+}
+
+function updateFrameDisplay() {
+    const frame = window.currentFrames[window.currentFrameIndex];
+    document.getElementById('currentFrame').src = `/api/alert_frame/${frame.id}`;
+    document.getElementById('frameCounter').textContent = `${window.currentFrameIndex + 1} / ${window.currentFrames.length}`;
+}
+
+function renderDetailChart(sensorData) {
+    const ctx = document.getElementById('detailTempChart').getContext('2d');
+    
+    const labels = sensorData.map(d => {
+        const date = new Date(d.timestamp);
+        return `${date.getSeconds()}초`;
+    });
+    
+    const temperatures = sensorData.map(d => d.temperature || 0);
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '체온 (°C)',
+                data: temperatures,
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+function sampleData(data, maxPoints) {
+    if (data.length <= maxPoints) {
+        return data;
+    }
+    
+    const step = Math.floor(data.length / maxPoints);
+    const sampled = [];
+    
+    for (let i = 0; i < data.length; i += step) {
+        if (sampled.length < maxPoints) {
+            sampled.push(data[i]);
+        }
+    }
+    
+    return sampled;
+}
+
+function showLoading(show) {
+    document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+    document.getElementById('contentArea').style.display = show ? 'none' : 'block';
+}
+</script>
+{% endblock %}

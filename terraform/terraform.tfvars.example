@@ -1,0 +1,22 @@
+# GCP 프로젝트 ID (필수)
+project_id = "your-gcp-project-id"
+
+# 리전 및 존 설정
+region = "asia-northeast3"
+zone   = "asia-northeast3-a"
+
+# 인스턴스 타입
+server_machine_type = "t2a-standard-1"  # 2 vCPU, 4GB RAM
+db_machine_type     = "t2a-standard-1"  # 2 vCPU, 4GB RAM
+
+# MySQL 설정 (실제 운영 환경에서는 강력한 비밀번호 사용)
+mysql_root_password = "root_password_1234"
+mysql_database      = "smartcradle"
+mysql_user          = "sc_user"
+mysql_password      = "SC_password_12!45"
+
+# Flask SECRET_KEY (랜덤한 문자열 생성 권장)
+secret_key = "sc_secret_1234_change_this_in_production"
+
+# Docker 이미지
+docker_image = "joohyun7818/smart-cradle-flask:latest"

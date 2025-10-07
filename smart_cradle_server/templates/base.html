@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-5WSDTRBS');</script>
+    <!-- End Google Tag Manager -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스마트 요람 시스템</title>
@@ -47,6 +54,10 @@
     </style>
 </head>
 <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5WSDTRBS"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container">
             <a class="navbar-brand" href="/">스마트 요람</a>
@@ -57,13 +68,24 @@
                 <ul class="navbar-nav ms-auto">
                     {% if session.get('user_id') %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/">대시보드</a>
+                            <a class="nav-link" href="/dashboard">
+                                <i class="fas fa-home"></i> 대시보드
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/register_cradle">요람 등록</a>
+                            <a class="nav-link" href="/history">
+                                <i class="fas fa-chart-line"></i> 히스토리
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/logout">로그아웃</a>
+                            <a class="nav-link" href="/register_cradle">
+                                <i class="fas fa-cog"></i> 요람 관리
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/logout">
+                                <i class="fas fa-sign-out-alt"></i> 로그아웃
+                            </a>
                         </li>
                     {% else %}
                         <li class="nav-item">

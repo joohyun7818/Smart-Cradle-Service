@@ -1,0 +1,17 @@
+# Terraform 상태 파일
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# 민감한 정보가 포함된 파일
+terraform.tfvars
+*.auto.tfvars
+
+# 백업 파일
+*.backup
+*~
+
+# OS 파일
+.DS_Store
+Thumbs.db

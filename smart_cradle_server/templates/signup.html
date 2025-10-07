@@ -1,61 +1,42 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>회원가입 - 스마트 요람 모니터링</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .signup-container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-        }
-        .signup-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .signup-header i {
-            font-size: 3rem;
-            color: #0d6efd;
-            margin-bottom: 15px;
-        }
-        .form-floating {
-            margin-bottom: 15px;
-        }
-        .btn-signup {
-            width: 100%;
-            padding: 10px;
-        }
-        .login-link {
-            text-align: center;
-            margin-top: 20px;
-        }
-        #username-message {
-            font-size: 0.875rem;
-            margin-top: 5px;
-        }
-        .error-message {
-            color: #dc3545;
-        }
-        .success-message {
-            color: #198754;
-        }
-    </style>
-</head>
-<body>
-    <div class="signup-container">
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .signup-container {
+        background: white;
+        padding: 40px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 500px;
+        margin: 2rem auto;
+    }
+    .signup-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .signup-header i {
+        font-size: 3rem;
+        color: #0d6efd;
+        margin-bottom: 15px;
+    }
+    .form-floating {
+        margin-bottom: 15px;
+    }
+    .btn-signup {
+        width: 100%;
+        padding: 10px;
+    }
+    .login-link {
+        text-align: center;
+        margin-top: 20px;
+    }
+    #username-message {
+        font-size: 0.875rem;
+        margin-top: 5px;
+    }
+</style>
+
+<div class="signup-container">
         <div class="signup-header">
             <i class="fas fa-baby"></i>
             <h2>스마트 요람 모니터링</h2>
@@ -97,33 +78,40 @@
             </a>
         </div>
     </div>
+{% endblock %}
 
-    <script>
-        function checkUsername() {
-            const username = document.getElementById('username').value;
-            const messageDiv = document.getElementById('username-message');
+{% block scripts %}
+<script>
+    function checkUsername() {
+        const username = document.getElementById('username').value;
+        const messageDiv = document.getElementById('username-message');
 
-            fetch(`/check_username/${username}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.exists) {
-                        messageDiv.innerHTML = '<i class="fas fa-times-circle text-danger"></i> 이미 사용 중인 아이디입니다.';
-                    } else {
-                        messageDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> 사용 가능한 아이디입니다.';
-                    }
-                });
+        if (!username) {
+            messageDiv.innerHTML = '';
+            return;
         }
 
-        function validateForm() {
-            const messageDiv = document.getElementById('username-message');
-            if (messageDiv.innerHTML.includes('이미 사용 중인 아이디입니다')) {
-                alert('이미 사용 중인 아이디입니다. 다른 아이디를 선택해주세요.');
-                return false;
-            }
-            return true;
-        }
-    </script>
+        fetch(`/check_username/${username}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    messageDiv.innerHTML = '<i class="fas fa-times-circle text-danger"></i> 이미 사용 중인 아이디입니다.';
+                } else {
+                    messageDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> 사용 가능한 아이디입니다.';
+                }
+            })
+            .catch(error => {
+                console.error('Error checking username:', error);
+            });
+    }
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    function validateForm() {
+        const messageDiv = document.getElementById('username-message');
+        if (messageDiv.innerHTML.includes('이미 사용 중인 아이디입니다')) {
+            alert('이미 사용 중인 아이디입니다. 다른 아이디를 선택해주세요.');
+            return false;
+        }
+        return true;
+    }
+</script>
+{% endblock %}

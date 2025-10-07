@@ -1,28 +1,140 @@
-#.gitignore for this project
-# Ignore env files
-.env
-smart_cradle_server/.env
+# SmartCradle 프로젝트 .gitignore
 
+# ========================================
+# Node & NPM (모바일 앱)
+# ========================================
+SmartCradleApp/node_modules/
+node_modules/
+npm-debug.log*
+yarn-error.log
+yarn-debug.log*
+package-lock.json.bak
+
+# ========================================
+# Expo / React Native
+# ========================================
+SmartCradleApp/.expo/
+SmartCradleApp/.expo-shared/
+SmartCradleApp/android/.gradle/
+SmartCradleApp/android/app/build/
+SmartCradleApp/ios/Pods/
+SmartCradleApp/ios/build/
+SmartCradleApp/*.keystore
+SmartCradleApp/*.jks
+SmartCradleApp/*.p12
+SmartCradleApp/*.mobileprovision
+
+# ========================================
+# Environment Variables & Secrets
+# ========================================
+.env
+.env.*
+!.env.example
+smart_cradle_server/.env
+SmartCradleApp/.env
+
+# ========================================
 # Python
+# ========================================
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+*.pyc
+*.pyi
 env/
 venv/
+.venv/
 ENV/
 venv.bak/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
 
+# ========================================
+# Terraform
+# ========================================
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+!terraform/terraform.tfvars.example
+
+# ========================================
 # Docker
+# ========================================
 *.log
 docker-compose.override.yml
+docker-compose.*.yml
 
+# ========================================
 # macOS
+# ========================================
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
 
-# Database backups
-backups/*.sql
+# ========================================
+# IDEs & Editors
+# ========================================
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
 
-# Markdown
-.README_BACKUP.md
-.README_DOCKER.md
+# ========================================
+# Backups & Logs
+# ========================================
+backups/
+logs/
+*.bak
+*.tmp
+
+# ========================================
+# Database & Media
+# ========================================
+*.sqlite
+*.sqlite3
+*.db
+*.sql.gz
+
+# ========================================
+# Temporary & System Files
+# ========================================
+typescript
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+
+# ========================================
+# ML Models & Large Files
+# ========================================
+*.h5
+*.pkl
+*.joblib
+*.model
+knn_model.joblib
+
+# ========================================
+# Project Specific
+# ========================================
+smart_cradle_server/__pycache__/
+Test01/.DS_Store
+수정_가이드.md

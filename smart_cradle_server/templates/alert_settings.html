@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+
+{% block title %}알림 설정{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">🔔 알림 설정</h2>
+            
+            {% if agents %}
+                {% for agent in agents %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-baby"></i> 요람 {{ loop.index }} ({{ agent.uuid }})
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="alert-form-{{ agent.uuid }}" class="alert-settings-form" data-uuid="{{ agent.uuid }}">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="max_temp_{{ agent.uuid }}" class="form-label">
+                                            <i class="fas fa-thermometer-half text-danger"></i> 최대 허용 체온 (°C)
+                                        </label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="max_temp_{{ agent.uuid }}" 
+                                               name="max_temperature"
+                                               step="0.1" 
+                                               min="35" 
+                                               max="42"
+                                               value="{{ agent_alerts[agent.uuid].max_temperature if agent_alerts[agent.uuid] else 38.0 }}">
+                                        <div class="form-text">체온이 이 온도를 초과하면 알림을 전송합니다.</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="position_timeout_{{ agent.uuid }}" class="form-label">
+                                            <i class="fas fa-clock text-warning"></i> 비정상 자세 허용 시간 (초)
+                                        </label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="position_timeout_{{ agent.uuid }}" 
+                                               name="abnormal_position_timeout"
+                                               min="10" 
+                                               max="300"
+                                               value="{{ agent_alerts[agent.uuid].abnormal_position_timeout if agent_alerts[agent.uuid] else 30 }}">
+                                        <div class="form-text">아기가 정면을 보지 않거나 인식되지 않는 시간이 이 시간을 초과하면 알림을 전송합니다.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="crying_timeout_{{ agent.uuid }}" class="form-label">
+                                            <i class="fas fa-baby-carriage text-info"></i> 울음 알림 임계값 (초)
+                                        </label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="crying_timeout_{{ agent.uuid }}" 
+                                               name="crying_duration_threshold"
+                                               min="5" 
+                                               max="180"
+                                               value="{{ agent_alerts[agent.uuid].crying_duration_threshold if agent_alerts[agent.uuid] else 30 }}">
+                                        <div class="form-text">아기가 이 시간 이상 울면 알림을 전송합니다.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="push_enabled_{{ agent.uuid }}" 
+                                                   name="push_notifications_enabled"
+                                                   {{ 'checked' if not agent_alerts[agent.uuid] or agent_alerts[agent.uuid].push_notifications_enabled }}>
+                                            <label class="form-check-label" for="push_enabled_{{ agent.uuid }}">
+                                                <i class="fas fa-bell text-primary"></i> 푸시 알림 활성화
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="email_enabled_{{ agent.uuid }}" 
+                                                   name="email_notifications_enabled"
+                                                   {{ 'checked' if agent_alerts[agent.uuid] and agent_alerts[agent.uuid].email_notifications_enabled }}>
+                                            <label class="form-check-label" for="email_enabled_{{ agent.uuid }}">
+                                                <i class="fas fa-envelope text-info"></i> 이메일 알림 활성화 (준비 중)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> 설정 저장
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <!-- 웹 푸시 알림 구독 섹션 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-mobile-alt"></i> 브라우저 알림 설정
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="push-subscription-status" class="mb-3">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">확인 중...</span>
+                            </div>
+                            브라우저 알림 상태를 확인하는 중...
+                        </div>
+                        
+                        <button id="enable-push-btn" class="btn btn-success" style="display: none;">
+                            <i class="fas fa-bell"></i> 브라우저 알림 활성화
+                        </button>
+                        
+                        <button id="disable-push-btn" class="btn btn-outline-secondary" style="display: none;">
+                            <i class="fas fa-bell-slash"></i> 브라우저 알림 비활성화
+                        </button>
+                        
+                        <div class="form-text mt-2">
+                            실시간 알림을 받으려면 브라우저 알림 권한을 허용해주세요.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 최근 알림 로그 -->
+                <div class="card mt-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history"></i> 최근 알림 기록
+                        </h5>
+                        <button id="refresh-logs-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-sync-alt"></i> 새로고침
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="alert-logs-container">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">로딩 중...</span>
+                                </div>
+                                <p class="mt-2">알림 기록을 불러오는 중...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            {% else %}
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle"></i>
+                    등록된 요람이 없습니다. 먼저 요람을 등록해주세요.
+                </div>
+                <a href="/register_cradle" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> 요람 등록하기
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 알림 설정 폼 처리
+    document.querySelectorAll('.alert-settings-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const uuid = this.dataset.uuid;
+            const formData = new FormData(this);
+            const data = {};
+            
+            // 체크박스 처리
+            data.max_temperature = parseFloat(formData.get('max_temperature'));
+            data.abnormal_position_timeout = parseInt(formData.get('abnormal_position_timeout'));
+            data.push_notifications_enabled = formData.get('push_notifications_enabled') === 'on';
+            data.email_notifications_enabled = formData.get('email_notifications_enabled') === 'on';
+            
+            // 서버로 전송
+            fetch(`/api/alert_settings/${uuid}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    // 성공 메시지 표시
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-check-circle"></i> 설정이 저장되었습니다.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    this.parentNode.insertBefore(alert, this);
+                    
+                    // 3초 후 자동 제거
+                    setTimeout(() => {
+                        if (alert.parentNode) {
+                            alert.remove();
+                        }
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || '설정 저장 실패');
+                }
+            })
+            .catch(error => {
+                // 오류 메시지 표시
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i> 설정 저장 중 오류가 발생했습니다: ${error.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                this.parentNode.insertBefore(alert, this);
+            });
+        });
+    });
+    
+    // 웹 푸시 알림 관리
+    const pushStatus = document.getElementById('push-subscription-status');
+    const enableBtn = document.getElementById('enable-push-btn');
+    const disableBtn = document.getElementById('disable-push-btn');
+    
+    // 브라우저 푸시 알림 지원 확인
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+        checkPushSubscription();
+    } else {
+        pushStatus.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> 이 브라우저는 푸시 알림을 지원하지 않습니다.</div>';
+    }
+    
+    function checkPushSubscription() {
+        // TODO: 서비스 워커 및 푸시 구독 상태 확인 로직
+        pushStatus.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> 브라우저 알림 기능은 준비 중입니다.</div>';
+    }
+    
+    // 최근 알림 로그 로드
+    loadAlertLogs();
+    
+    document.getElementById('refresh-logs-btn').addEventListener('click', loadAlertLogs);
+    
+    function loadAlertLogs() {
+        const container = document.getElementById('alert-logs-container');
+        
+        fetch('/api/alert_logs')
+        .then(response => response.json())
+        .then(logs => {
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted"><i class="fas fa-inbox"></i><br>최근 24시간 내 알림이 없습니다.</div>';
+                return;
+            }
+            
+            let html = '<div class="table-responsive"><table class="table table-sm">';
+            html += '<thead><tr><th>시간</th><th>요람</th><th>유형</th><th>메시지</th><th>상태</th></tr></thead><tbody>';
+            
+            logs.forEach(log => {
+                const date = new Date(log.created_at);
+                const typeIcon = log.alert_type === 'high_temperature' ? 
+                    '<i class="fas fa-thermometer-half text-danger"></i>' : 
+                    '<i class="fas fa-exclamation-triangle text-warning"></i>';
+                
+                const statusBadge = log.resolved ? 
+                    '<span class="badge bg-success">해결됨</span>' : 
+                    '<span class="badge bg-warning">대기중</span>';
+                
+                html += `<tr>
+                    <td>${date.toLocaleString('ko-KR')}</td>
+                    <td>${log.agent_uuid.substr(0, 8)}...</td>
+                    <td>${typeIcon}</td>
+                    <td>${log.message}</td>
+                    <td>${statusBadge}</td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        })
+        .catch(error => {
+            container.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> 알림 기록을 불러오는 중 오류가 발생했습니다.</div>';
+        });
+    }
+});
+</script>
+{% endblock %}
